@@ -11,7 +11,6 @@
     <div v-if="imageUrl" class="crop-section">
       <ImageCropper
         :src="imageUrl"
-        :aspectRatio="1"
         @cropped="onCropped"
       />
       <button class="reset-button" @click="reset">다시 업로드</button>
@@ -21,7 +20,7 @@
     <div v-if="croppedUrl" class="result">
       <h2>자른 이미지</h2>
       <img :src="croppedUrl" alt="Cropped Image" />
-      <a :href="croppedUrl" download="cropped.jpg">
+      <a :href="croppedUrl" :download="downloadName">
         <button>다운로드</button>
       </a>
     </div>
@@ -29,14 +28,15 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import ImageUploader from './components/ImageUploader.vue';
 import ImageCropper from './components/ImageCropper.vue';
 
 // 업로드된 파일의 URL
 const imageUrl = ref<string>('');
-// 크롭 후 Blob URL
+// 크롭 후 Blob URL 및 포맷
 const croppedUrl = ref<string>('');
+const croppedFormat = ref<string>('image/jpeg');
 
 // 파일 선택 시 호출
 function onFileSelected(file: File) {
@@ -45,11 +45,18 @@ function onFileSelected(file: File) {
   croppedUrl.value = '';
 }
 
-// Cropper에서 자른 후 Blob 받으면 URL 생성
-function onCropped(blob: Blob) {
+// Cropper에서 자른 후 Blob과 포맷 받으면 URL 생성
+function onCropped(blob: Blob, format: string) {
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
+  croppedFormat.value = format;
   croppedUrl.value = URL.createObjectURL(blob);
 }
+
+// 다운로드 파일명 계산
+const downloadName = computed(() => {
+  const ext = croppedFormat.value === 'image/png' ? 'png' : 'jpg';
+  return `cropped.${ext}`;
+});
 
 // 초기 상태로 리셋
 function reset() {
