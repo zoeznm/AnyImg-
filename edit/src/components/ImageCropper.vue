@@ -10,13 +10,6 @@
         Height(px):
         <input type="number" v-model.number="heightPx" min="1" />
       </label>
-      <label>
-        Format:
-        <select v-model="outputFormat">
-          <option value="image/jpeg">JPEG</option>
-          <option value="image/png">PNG</option>
-        </select>
-      </label>
       <button class="apply-button" @click="applyDimensions">적용</button>
     </div>
 
@@ -39,7 +32,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref } from 'vue';
 import VueCropper from 'vue-cropperjs';
 
 // 부모로부터 이미지 URL만 받음
