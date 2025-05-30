@@ -1,43 +1,62 @@
 <template>
-  <div class="cropper-container">
+  <div class="image-cropper-wrapper">
+    <!-- 픽셀 단위 입력 폼 -->
+    <div class="dimensions-inputs">
+      <label>
+        Width(px):
+        <input type="number" v-model.number="widthPx" min="1" />
+      </label>
+      <label>
+        Height(px):
+        <input type="number" v-model.number="heightPx" min="1" />
+      </label>
+      <button class="apply-button" @click="applyDimensions">적용</button>
+    </div>
+
+    <!-- Cropper.js 컴포넌트 (자유 비율) -->
     <vue-cropper
       ref="cropper"
       :src="src"
-      :aspect-ratio="aspectRatio"
-      :view-mode="1"
+      view-mode="1"
       :auto-crop-area="1"
+      drag-mode="crop"
+      :guides="true"
       :background="false"
       :responsive="true"
-      :guides="true"      
-      :drag-mode="'crop'"  
       class="cropper"
     />
-    <button @click="cropImage">이미지 자르기</button>
+
+    <!-- 이미지 자르기 버튼 -->
+    <button class="crop-button" @click="cropImage">이미지 자르기</button>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref} from 'vue';
+import { ref, defineProps, defineEmits } from 'vue';
 import VueCropper from 'vue-cropperjs';
 
-// 부모로부터 받아올 프로퍼티 (매크로로 자동 처리)
-const props = defineProps<{
-  src: string;
-  aspectRatio?: number;
-}>();
+// 부모로부터 이미지 URL만 받음
+const props = defineProps<{ src: string }>();
+const emit = defineEmits<{ (e: 'cropped', blob: Blob): void }>();
 
-// 'cropped' 이벤트로 Blob을 상위 컴포넌트에 전달 (매크로로 자동 처리)
-const emit = defineEmits<{
-  (e: 'cropped', blob: Blob): void;
-}>();
-
-// Cropper 인스턴스를 참조하기 위한 ref
+// Cropper 인스턴스
 const cropper = ref<InstanceType<typeof VueCropper> | null>(null);
-const aspectRatio = props.aspectRatio ?? 1;
 
+// 원하는 픽셀 단위 크기
+const widthPx = ref<number>(100);
+const heightPx = ref<number>(100);
+
+// 크롭 박스 크기 설정 (픽셀 단위)
+function applyDimensions() {
+  if (!cropper.value) return;
+  cropper.value.setCropBoxData({ width: widthPx.value, height: heightPx.value });
+}
+
+// 실제 이미지 자르기
 function cropImage() {
   if (!cropper.value) return;
-  const canvas = cropper.value.getCroppedCanvas();
+  // 지정한 픽셀 크기로 출력
+  const canvas = cropper.value.getCroppedCanvas({ width: widthPx.value, height: heightPx.value });
   canvas.toBlob((blob) => {
     if (blob) emit('cropped', blob);
   }, 'image/jpeg');
@@ -45,11 +64,46 @@ function cropImage() {
 </script>
 
 <style lang="scss" scoped>
-.cropper-container {
+.image-cropper-wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 1rem;
+
+  .dimensions-inputs {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+
+    label {
+      margin-right: 1rem;
+      font-size: 0.9rem;
+
+      input {
+        width: 60px;
+        margin-left: 0.5rem;
+        padding: 0.2rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+    }
+
+    .apply-button {
+      position: relative;
+      z-index: 10;
+      padding: 0.4rem 1rem;
+      font-size: 0.9rem;
+      background-color: #409eff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      &:hover {
+        background-color: #66b1ff;
+      }
+    }
+  }
 
   .cropper {
     width: 100%;
@@ -57,12 +111,15 @@ function cropImage() {
     height: 400px;
   }
 
-  button {
+  .crop-button {
+    position: relative;
+    z-index: 10;
     margin-top: 1rem;
     padding: 0.5rem 1rem;
-    border: none;
+    font-size: 0.9rem;
     background-color: #409eff;
-    color: white;
+    color: #fff;
+    border: none;
     border-radius: 4px;
     cursor: pointer;
     &:hover {
