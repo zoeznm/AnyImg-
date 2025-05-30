@@ -8,6 +8,8 @@
       :auto-crop-area="1"
       :background="false"
       :responsive="true"
+      :guides="true"      
+      :drag-mode="'crop'"  
       class="cropper"
     />
     <button @click="cropImage">이미지 자르기</button>
@@ -15,17 +17,16 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref} from 'vue';
 import VueCropper from 'vue-cropperjs';
-import 'cropperjs/dist/cropper.css';
 
-// 부모로부터 받아올 프로퍼티
+// 부모로부터 받아올 프로퍼티 (매크로로 자동 처리)
 const props = defineProps<{
   src: string;
   aspectRatio?: number;
 }>();
 
-// 'cropped' 이벤트로 Blob을 상위 컴포넌트에 전달
+// 'cropped' 이벤트로 Blob을 상위 컴포넌트에 전달 (매크로로 자동 처리)
 const emit = defineEmits<{
   (e: 'cropped', blob: Blob): void;
 }>();

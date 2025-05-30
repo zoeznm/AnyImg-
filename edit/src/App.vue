@@ -2,16 +2,19 @@
   <div id="app">
     <h1>이미지 편집기</h1>
 
-    <!-- 1. 파일 업로드 -->
-    <ImageUploader @file-selected="onFileSelected" />
+    <!-- 1. 파일 업로드: 이미지가 없는 경우에만 표시 -->
+    <div v-if="!imageUrl" class="upload-section">
+      <ImageUploader @file-selected="onFileSelected" />
+    </div>
 
-    <!-- 2. 크롭퍼 표시: src가 설정된 경우에만 -->
-    <div v-if="imageUrl">
+    <!-- 2. 크롭퍼 표시: 이미지가 업로드된 경우에만 표시 -->
+    <div v-if="imageUrl" class="crop-section">
       <ImageCropper
         :src="imageUrl"
         :aspectRatio="1"
         @cropped="onCropped"
       />
+      <button class="reset-button" @click="reset">다시 업로드</button>
     </div>
 
     <!-- 3. 자른 이미지 미리보기 & 다운로드 -->
@@ -37,20 +40,23 @@ const croppedUrl = ref<string>('');
 
 // 파일 선택 시 호출
 function onFileSelected(file: File) {
-  // 기존 URL 해제
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
-  // Object URL 생성
   imageUrl.value = URL.createObjectURL(file);
-  // 이전 크롭 결과 초기화
   croppedUrl.value = '';
 }
 
 // Cropper에서 자른 후 Blob 받으면 URL 생성
 function onCropped(blob: Blob) {
-  // 기존 Blob URL 해제
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
-  const url = URL.createObjectURL(blob);
-  croppedUrl.value = url;
+  croppedUrl.value = URL.createObjectURL(blob);
+}
+
+// 초기 상태로 리셋
+function reset() {
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
+  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
+  imageUrl.value = '';
+  croppedUrl.value = '';
 }
 </script>
 
@@ -62,6 +68,11 @@ function onCropped(blob: Blob) {
 
   h1 {
     margin-bottom: 1rem;
+  }
+
+  .upload-section,
+  .crop-section {
+    margin: 1.5rem 0;
   }
 
   .result {
@@ -85,6 +96,18 @@ function onCropped(blob: Blob) {
       &:hover {
         background-color: #66b1ff;
       }
+    }
+  }
+
+  .reset-button {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: #ddd;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background-color: #ccc;
     }
   }
 }
