@@ -32,7 +32,9 @@ const messages = {
     redo: '다시 실행',
     unsupportedFormat: '{name} 은(는) 지원하지 않는 포맷입니다.',
     fileTooLarge: '{name} 파일 크기가 너무 큽니다. (최대 10MB)',
-    usageNote: 'PNG/JPEG/WEBP 형식만 업로드 가능합니다 (최대 10MB)'
+    usageNote: 'PNG/JPEG/WEBP 형식만 업로드 가능합니다 (최대 10MB)',
+        selectImageLabel: '이미지 선택하기',
+    cropImageLabel: '이미지 자르기'
   },
   en: {
     appTitle: 'AnyIMG Editor',
@@ -63,7 +65,9 @@ const messages = {
     redo: 'Redo',
     unsupportedFormat: '{name} is an unsupported format.',
     fileTooLarge: '{name} is too large (max 10MB)',
-    usageNote: 'Only PNG/JPEG/WEBP allowed (max 10MB)'
+    usageNote: 'Only PNG/JPEG/WEBP allowed (max 10MB)',
+        selectImageLabel: 'Select Image',
+    cropImageLabel: 'Crop Image'
   }
 }
 

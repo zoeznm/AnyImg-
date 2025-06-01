@@ -11,7 +11,7 @@
     />
     <!-- 사용자에게 보일 버튼 -->
     <button class="upload-button" @click="triggerFileInput">
-      이미지 선택하기
+      {{ $t('selectImageLabel') }}
     </button>
     <p class="note">PNG/JPEG/WEBP/JPG 형식만 업로드 가능합니다 (최대 10MB)</p>
   </div>

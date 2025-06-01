@@ -125,7 +125,7 @@
                 :class="['tab-button', { active: mode === 'crop' }]"
                 @click="mode = 'crop'"
               >
-                {{ $t('tabCrop') }}
+              {{ $t('cropImageLabel') }}
               </button>
               <button
                 :class="['tab-button', { active: mode === 'convert' }]"
@@ -567,23 +567,7 @@ function onCropReady({ detail }: CustomEvent) {
 }
 
 // 9) Crop 결과 수신
-function onCropped(blob: Blob) {
-  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value)
-  croppedBlob.value = blob
-  croppedUrl.value = URL.createObjectURL(blob)
 
-  if (selectedIndex.value !== null) {
-    const idx = selectedIndex.value
-    // 히스토리 먼저 기록
-    pushToHistory(idx, images.value[idx].url)
-    // 현재 URL revoke
-    URL.revokeObjectURL(images.value[idx].url)
-    // 배열 덮어쓰기
-    images.value[idx].url = croppedUrl.value
-    // 히스토리 새 URL 저장
-    pushToHistory(idx, croppedUrl.value)
-  }
-}
 
 // 10) Crop된 이미지 다운로드
 function downloadCropped() {
@@ -594,46 +578,136 @@ function downloadCropped() {
   a.download = `cropped.${ext}`
   a.click()
 }
+// ─────────────────────────────────────────────────────────────────────────
+// (1) 히스토리 초기화: 업로드 시 한 번만 호출해야 함
+//    // images.value[idx].url 은 File → createObjectURL(file)로 생성된 원본 URL
+//    historyMap[newIdx] = [ images.value[newIdx].url ]
+//    historyIndexMap[newIdx] = 0
+// ─────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────
+// (2) onCropped: “한 개 이미지 크롭” 후
+//    • 절대 기존 URL을 revoke하지 않는다.
+//    • 단, 히스토리에 원본 URL(또는 마지막 URL)만 추가하고,
+//      새로운 Blob URL을 만들어 바로 덮어쓴 뒤 히스토리에 추가한다.
+// ─────────────────────────────────────────────────────────────────────────
+function onCropped(blob: Blob) {
+  // ① 크롭된 Blob으로 임시 URL 생성
+  const newUrl = URL.createObjectURL(blob);
+  croppedBlob.value = blob;
+  croppedUrl.value = newUrl;
+
+  if (selectedIndex.value === null) return;
+  const idx = selectedIndex.value;
+
+  // ② 현재(히스토리 상의) URL을 히스토리에 (한 번) 추가
+  //    (historyIndexMap[idx]가 0이고 historyMap[idx]이 [원본URL]이라면,
+  //     여기서 그 원본 URL을 또 한 번 쌓는 게 아니라, 이미 ⓐ원본URL이 0번째인 상태이므로
+  //     곧바로 새 URL을 추가해도 무방합니다. 하지만 pushToHistory 내부에서
+  //     “인덱스 < 내용 길이-1”을 자른 뒤 추가하므로 중복 걱정은 없습니다.)
+  pushToHistory(idx, images.value[idx].url);
+
+  // ③ 배열에 덮어쓰기: 실제 화면에 표시될 URL을 ‘크롭된 Blob URL’로 교체
+  images.value[idx].url = newUrl;
+  images.value[idx].type = images.value[idx].type; // 포맷은 원본 유지
+
+  // ④ 히스토리에 ‘크롭 후 URL’도 저장
+  pushToHistory(idx, newUrl);
+
+  // ⚠️ 절대 기존 URL(images.value[idx].url)을 여기서 revokeObjectURL 하지 마세요.
+  //    Undo할 때 원본 URL이 유효해야 합니다.
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// (3) convertOriginal: “한 개 이미지 포맷 변환” 후
+//    • 역시 기존 URL을 revoke하지 않는다.
+//    • Canvas → Blob URL 생성, URL만 교체하고 히스토리에 추가한다.
+// ─────────────────────────────────────────────────────────────────────────
+async function convertOriginal() {
+  if (selectedIndex.value === null) return;
+  const idx = selectedIndex.value;
+  const imgItem = images.value[idx];
+  const originalUrl = imgItem.url;
+
+  const img = new Image();
+  img.src = originalUrl;
+  await img.decode();
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  // ① 히스토리에 변환 전 URL(현재 URL)만 추가
+  pushToHistory(idx, originalUrl);
+
+  // ② Canvas → Blob → 새 URL 생성
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const newUrl = URL.createObjectURL(blob);
+
+    // ③ 배열에 덮어쓰기: 화면 표시용 URL만 새로 교체
+    images.value[idx].url = newUrl;
+    images.value[idx].type = convertedFormat.value;
+
+    // ④ 변환 후 새 URL을 히스토리에 추가
+    pushToHistory(idx, newUrl);
+
+    // ⚠️ 기존 originalUrl(히스토리 첫 항목)은 revoke 하지 않는다.
+  }, convertedFormat.value);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// (4) 단일 이미지 Undo/Redo
+//    • Undo: 현재 URL을 revoke 하지 않고, 히스토리 인덱스를 1 감소시킨 뒤
+//      oldUrl = historyMap[idx][newIndex]를 배열에 넣어준다.
+//    • Redo: 동일하게 히스토리 인덱스를 1 증가시킨 뒤 해당 URL만 교체.
+//    • 절대 images.value.splice 등을 사용하지 않는다! (배열에서 삭제 금지)
+// ─────────────────────────────────────────────────────────────────────────
 // 11) Undo / Redo (한 이미지)
 const undoDisabled = computed(() => {
-  if (selectedIndex.value === null) return true
-  return historyIndexMap[selectedIndex.value]! <= 0
-})
+  if (selectedIndex.value === null) return true;
+  return historyIndexMap[selectedIndex.value]! <= 0;
+});
 const redoDisabled = computed(() => {
-  if (selectedIndex.value === null) return true
-  const arr = historyMap[selectedIndex.value] || []
-  return historyIndexMap[selectedIndex.value]! >= arr.length - 1
-})
+  if (selectedIndex.value === null) return true;
+  const arr = historyMap[selectedIndex.value] || [];
+  return historyIndexMap[selectedIndex.value]! >= arr.length - 1;
+});
 
 function undo() {
-  if (selectedIndex.value === null) return
-  const idx = selectedIndex.value
-  const currentIdx = historyIndexMap[idx]
+  if (selectedIndex.value === null) return;
+  const idx = selectedIndex.value;
+  const currentIdx = historyIndexMap[idx];
   if (currentIdx! > 0) {
-    // 현재 URL revoke
-    URL.revokeObjectURL(images.value[idx].url)
-    // 히스토리 인덱스 감소
-    historyIndexMap[idx] = currentIdx! - 1
-    // 이전 URL 가져와 복원
-    const prevUrl = historyMap[idx]![historyIndexMap[idx]!]
-    images.value[idx].url = prevUrl
+    // 1) 현재 URL을 revoke
+    URL.revokeObjectURL(images.value[idx].url);
+
+    // 2) 히스토리 인덱스를 1 감소
+    historyIndexMap[idx] = currentIdx! - 1;
+
+    // 3) 히스토리에서 이전 URL을 가져와 복원
+    const prevUrl = historyMap[idx]![historyIndexMap[idx]!];
+    images.value[idx].url = prevUrl;
   }
 }
 
 function redo() {
-  if (selectedIndex.value === null) return
-  const idx = selectedIndex.value
-  const arr = historyMap[idx] || []
-  const currentIdx = historyIndexMap[idx]
+  if (selectedIndex.value === null) return;
+  const idx = selectedIndex.value;
+  const arr = historyMap[idx] || [];
+  const currentIdx = historyIndexMap[idx];
   if (currentIdx! < arr.length - 1) {
-    // 현재 URL revoke
-    URL.revokeObjectURL(images.value[idx].url)
-    // 히스토리 인덱스 증가
-    historyIndexMap[idx] = currentIdx! + 1
-    // 다음 URL 가져와 복원
-    const nextUrl = historyMap[idx]![historyIndexMap[idx]!]
-    images.value[idx].url = nextUrl
+    // 1) 현재 URL을 revoke
+    URL.revokeObjectURL(images.value[idx].url);
+
+    // 2) 히스토리 인덱스를 1 증가
+    historyIndexMap[idx] = currentIdx! + 1;
+
+    // 3) 히스토리에서 다음 URL을 가져와 복원
+    const nextUrl = historyMap[idx]![historyIndexMap[idx]!];
+    images.value[idx].url = nextUrl;
   }
 }
 
@@ -642,42 +716,7 @@ const cropperStyle = computed(() => ({
   filter: `brightness(${brightness.value}) contrast(${contrast.value})`,
 }))
 
-// 13) 단일 이미지 포맷 변환
-async function convertOriginal() {
-  if (selectedIndex.value === null) return
-  const idx = selectedIndex.value
-  const imgItem = images.value[idx]
-  const originalUrl = imgItem.url
 
-  const img = new Image()
-  img.src = originalUrl
-  await img.decode()
-
-  const canvas = document.createElement('canvas')
-  canvas.width = img.naturalWidth
-  canvas.height = img.naturalHeight
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(img, 0, 0)
-
-  // 히스토리 기록
-  pushToHistory(idx, originalUrl)
-
-  canvas.toBlob(
-    (blob) => {
-      if (blob) {
-        if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value)
-        convertedUrl.value = URL.createObjectURL(blob)
-        // 현재 URL revoke
-        URL.revokeObjectURL(images.value[idx].url)
-        // 히스토리 새 URL 기록 & 복원
-        pushToHistory(idx, convertedUrl.value)
-        images.value[idx].url = convertedUrl.value
-        images.value[idx].type = convertedFormat.value
-      }
-    },
-    convertedFormat.value
-  )
-}
 
 // 14) 다운로드 파일명 계산
 const downloadCroppedName = computed(() => {
@@ -940,6 +979,7 @@ function setConvertedFormat() {
     justify-content: space-between;
     align-items: center;
     margin-top: 1rem;
+
   }
 }
 

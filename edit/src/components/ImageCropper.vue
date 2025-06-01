@@ -18,7 +18,7 @@
         @ready="onReady"
       />
     </div>
-    <button class="crop-button" @click="cropImage">이미지 자르기</button>
+    <button class="crop-button" @click="cropImage">{{ $t('cropImageLabel') }}</button>
   </div>
 </template>
 
