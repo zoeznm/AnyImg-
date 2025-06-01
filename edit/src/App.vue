@@ -35,6 +35,9 @@
         <button class="btn-secondary reset-all" @click="resetAll">
           전체 초기화
         </button>
+        <div class="add-upload">
+          <ImageUploader @files-selected="onFilesSelected" />
+        </div>
       </section>
 
       <!-- 3. 편집 섹션 -->
@@ -184,7 +187,8 @@
             <div v-if="mode === 'convert'" class="convert-mode">
               <h3 class="sub-title">이미지 포맷 변환</h3>
               <div class="convert-controls">
-                <label>변환 포맷:
+                <label
+                  >변환 포맷:
                   <select v-model="convertedFormat">
                     <option
                       v-for="fmt in availableFormats"
@@ -374,18 +378,15 @@ async function convertOriginal() {
   // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
   ctx.drawImage(img, 0, 0);
 
-  canvas.toBlob(
-    (blob) => {
-      if (blob) {
-        if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
-        convertedUrl.value = URL.createObjectURL(blob);
+  canvas.toBlob((blob) => {
+    if (blob) {
+      if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
+      convertedUrl.value = URL.createObjectURL(blob);
 
-        // 변환 결과도 히스토리에 추가 (Undo/Redo 대상)
-        pushToHistory(convertedUrl.value);
-      }
-    },
-    convertedFormat.value
-  );
+      // 변환 결과도 히스토리에 추가 (Undo/Redo 대상)
+      pushToHistory(convertedUrl.value);
+    }
+  }, convertedFormat.value);
 }
 
 // 9) 다운로드 파일명 계산
