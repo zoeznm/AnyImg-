@@ -320,9 +320,11 @@ function resetAll() {
   max-width: 800px;
   margin: 2rem auto;
   text-align: center;
+  padding: 0 1rem; /* 좌우 여백 추가 */
 
   h1 {
     margin-bottom: 1rem;
+    font-size: 1.5rem;
   }
 
   /* 1. 업로드 섹션 */
@@ -336,22 +338,28 @@ function resetAll() {
 
     h2 {
       margin-bottom: 1rem;
+      font-size: 1.2rem;
     }
 
     .thumb-list {
       display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      justify-content: center;
+      flex-wrap: nowrap; /* 모바일에서는 가로 스크롤 */
+      gap: 0.5rem;
+      justify-content: flex-start;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      -webkit-overflow-scrolling: touch;
     }
 
     .thumb-wrapper {
+      flex: 0 0 auto; /* 고정 너비 */
+      width: 100px;
       cursor: pointer;
       border: 2px solid transparent;
       border-radius: 4px;
-      padding: 0.5rem;
+      padding: 0.3rem;
       transition: border-color 0.2s;
-      width: 120px;
+      text-align: center;
 
       &.selected {
         border-color: #409eff;
@@ -365,19 +373,20 @@ function resetAll() {
       }
 
       .thumb-name {
-        margin-top: 0.5rem;
-        font-size: 0.85rem;
+        margin-top: 0.3rem;
+        font-size: 0.75rem;
         word-break: break-word;
       }
     }
 
     .reset-all {
       margin-top: 1rem;
-      padding: 0.5rem 1rem;
+      padding: 0.4rem 0.8rem;
       background: #ddd;
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      font-size: 0.9rem;
 
       &:hover {
         background: #ccc;
@@ -392,8 +401,9 @@ function resetAll() {
 
     .original-preview {
       max-width: 200px;
+      width: 100%;
       border: 1px solid #ddd;
-      margin-bottom: 1rem;
+      margin: 0 auto 1rem;
     }
 
     .tabs {
@@ -403,9 +413,11 @@ function resetAll() {
       margin-bottom: 1rem;
 
       button {
-        padding: 0.5rem 1rem;
+        padding: 0.4rem 0.8rem;
         border: none;
         cursor: pointer;
+        font-size: 0.9rem;
+        border-radius: 4px;
 
         &.active {
           background: #409eff;
@@ -414,34 +426,10 @@ function resetAll() {
       }
     }
 
-    /* 자르기 모드 */
-    .crop-mode {
+    /* 자르기 모드 & 변환 모드 공통 */
+    .crop-mode,
+    .convert-mode {
       margin-bottom: 1.5rem;
-
-      .filter-controls {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-
-        label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.9rem;
-
-          input[type="range"] {
-            width: 120px;
-          }
-        }
-      }
-
-      .cropper-wrapper {
-        max-width: 700px;
-        margin: 0 auto;
-        height: 400px;
-      }
 
       .controls {
         display: flex;
@@ -451,8 +439,10 @@ function resetAll() {
         margin-top: 1rem;
 
         .preview {
-          max-width: 300px;
+          max-width: 100%;
+          width: 250px;
           border: 1px solid #ddd;
+          border-radius: 4px;
         }
 
         button {
@@ -462,71 +452,60 @@ function resetAll() {
           border: none;
           border-radius: 4px;
           cursor: pointer;
+          font-size: 0.9rem;
 
           &:hover {
             background: #66b1ff;
           }
+        }
+
+        select {
+          padding: 0.3rem;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          font-size: 0.9rem;
         }
       }
     }
 
-    /* 변환 모드 */
-    .convert-mode {
-      margin-bottom: 1.5rem;
-
-      .controls {
+    /* 자르기 모드 전용 */
+    .crop-mode {
+      .filter-controls {
         display: flex;
-        flex-direction: column;
+        justify-content: center;
         align-items: center;
-        gap: 0.5rem;
+        gap: 1rem;
         margin-bottom: 1rem;
+        flex-wrap: wrap;
 
         label {
-          font-size: 0.9rem;
           display: flex;
           align-items: center;
           gap: 0.5rem;
+          font-size: 0.9rem;
 
-          select {
-            padding: 0.3rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+          input[type="range"] {
+            width: 100px;
           }
-        }
 
-        button {
-          padding: 0.5rem 1rem;
-          background: #409eff;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-
-          &:hover {
-            background: #66b1ff;
+          & + label {
+            margin-left: 0; /* 모바일에서 자동 줄바꿈을 위해 margin 제거 */
           }
         }
       }
 
-      .result {
-        .preview {
-          max-width: 300px;
-          border: 1px solid #ddd;
-        }
+      .cropper-wrapper {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        margin: 0 auto;
+      }
+    }
 
-        button {
-          margin-top: 0.5rem;
-          padding: 0.5rem 1rem;
-          background: #409eff;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-
-          &:hover {
-            background: #66b1ff;
-          }
-        }
+    /* 변환 모드 전용 */
+    .convert-mode {
+      .controls {
+        margin-bottom: 1rem;
       }
     }
 
@@ -538,9 +517,98 @@ function resetAll() {
       background: #ddd;
       border: none;
       cursor: pointer;
+      font-size: 0.8rem;
+      border-radius: 4px;
 
       &:hover {
         background: #ccc;
+      }
+    }
+  }
+
+  /* -----------------------------------
+     미디어 쿼리: 모바일 대응 (최대 폭 600px)
+     ----------------------------------- */
+  @media screen and (max-width: 600px) {
+    #app {
+      padding: 0 0.5rem;
+
+      h1 {
+        font-size: 1.25rem;
+      }
+
+      /* 썸네일 크기 줄이기 */
+      .thumbnails {
+        .thumb-wrapper {
+          width: 80px;
+
+          .thumb-name {
+            font-size: 0.7rem;
+          }
+        }
+
+        .reset-all {
+          font-size: 0.8rem;
+        }
+      }
+
+      /* 편집 섹션 */
+      .edit-section {
+        .original-preview {
+          max-width: 150px;
+        }
+
+        .tabs {
+          flex-wrap: wrap;
+          gap: 0.5rem;
+
+          button {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.85rem;
+          }
+        }
+
+        /* 자르기 모드 */
+        .crop-mode {
+          .filter-controls {
+            flex-direction: column;
+            gap: 0.5rem;
+
+            label {
+              font-size: 0.85rem;
+
+              input[type="range"] {
+                width: 80px;
+              }
+            }
+          }
+
+          .cropper-wrapper {
+            height: 300px;
+          }
+        }
+
+        /* 변환 모드 */
+        .convert-mode {
+          .controls {
+            gap: 0.5rem;
+
+            select {
+              font-size: 0.85rem;
+            }
+
+            button {
+              font-size: 0.85rem;
+            }
+          }
+        }
+
+        .reset-selected {
+          top: 0.3rem;
+          right: 0.3rem;
+          font-size: 0.75rem;
+          padding: 0.2rem 0.4rem;
+        }
       }
     }
   }
