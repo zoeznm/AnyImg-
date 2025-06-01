@@ -1,0 +1,73 @@
+// src/i18n.ts
+import { createI18n } from 'vue-i18n'
+
+// 한국어·영어 번역 메시지 예시
+const messages = {
+  ko: {
+    appTitle: 'AnyIMG 편집기',
+    uploadPrompt: '이미지를 업로드하세요',
+    totalImages: '업로드된 이미지 (총 {count}장)',
+    resetAll: '전체 초기화',
+    addMore: '이미지 추가 업로드',
+    edit: '편집: {name}',
+    originalFormat: '원본 포맷: {format}',
+    removeImage: '해당 이미지 제거',
+    tabCrop: '자르기',
+    tabConvert: '포맷 변환',
+    brightness: '밝기: {percent}%',
+    contrast: '대비: {percent}%',
+    widthPixels: '가로 픽셀:',
+    heightPixels: '세로 픽셀:',
+    apply: '적용',
+    cropResult: '크롭된 결과',
+    downloadCrop: '크롭 다운로드',
+    convertResult: '변환된 결과',
+    downloadConverted: '다운로드',
+    selectAll: '전체 선택',
+    deselectAll: '전체 선택 해제',
+    applyBatchCrop: '선택 이미지 일괄 크롭',
+    applyBatchConvert: '선택 이미지 일괄 변환',
+    undo: '실행 취소',
+    redo: '다시 실행',
+    unsupportedFormat: '{name} 은(는) 지원하지 않는 포맷입니다.',
+    fileTooLarge: '{name} 파일 크기가 너무 큽니다. (최대 10MB)',
+    usageNote: 'PNG/JPEG/WEBP 형식만 업로드 가능합니다 (최대 10MB)'
+  },
+  en: {
+    appTitle: 'AnyIMG Editor',
+    uploadPrompt: 'Upload your images',
+    totalImages: 'Uploaded images (total {count})',
+    resetAll: 'Reset All',
+    addMore: 'Add More Images',
+    edit: 'Edit: {name}',
+    originalFormat: 'Original Format: {format}',
+    removeImage: 'Remove This Image',
+    tabCrop: 'Crop',
+    tabConvert: 'Convert Format',
+    brightness: 'Brightness: {percent}%',
+    contrast: 'Contrast: {percent}%',
+    widthPixels: 'Width (px):',
+    heightPixels: 'Height (px):',
+    apply: 'Apply',
+    cropResult: 'Cropped Result',
+    downloadCrop: 'Download Cropped',
+    convertResult: 'Converted Result',
+    downloadConverted: 'Download',
+    selectAll: 'Select All',
+    deselectAll: 'Deselect All',
+    applyBatchCrop: 'Batch Crop Selected',
+    applyBatchConvert: 'Batch Convert Selected',
+    undo: 'Undo',
+    redo: 'Redo',
+    unsupportedFormat: '{name} is an unsupported format.',
+    fileTooLarge: '{name} is too large (max 10MB)',
+    usageNote: 'Only PNG/JPEG/WEBP allowed (max 10MB)'
+  }
+}
+
+export const i18n = createI18n({
+  legacy: false,
+  locale: navigator.language.startsWith('en') ? 'en' : 'ko',
+  fallbackLocale: 'en',
+  messages,
+})
