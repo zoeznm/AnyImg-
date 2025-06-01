@@ -79,6 +79,24 @@
             <div v-if="mode === 'crop'" class="crop-mode">
               <h3 class="sub-title">필터 & 픽셀 지정 크롭</h3>
 
+              <!-- 3-1. Undo / Redo 버튼 -->
+              <div class="history-controls">
+                <button
+                  class="btn-secondary"
+                  :disabled="historyIndex <= 0"
+                  @click="undo"
+                >
+                  Undo
+                </button>
+                <button
+                  class="btn-secondary"
+                  :disabled="historyIndex >= history.length - 1"
+                  @click="redo"
+                >
+                  Redo
+                </button>
+              </div>
+
               <!-- 필터 컨트롤 -->
               <div class="filter-controls">
                 <div class="filter-group">
@@ -131,12 +149,15 @@
               <!-- Cropper 영역 (desiredWidth/Height prop 전달) -->
               <div class="cropper-wrapper">
                 <ImageCropper
-                  :key="selectedImage.url"
-                  :src="selectedImage.url"
+                  :key="selectedImage.url + (history[historyIndex] || '')"
+                  :src="history[historyIndex] || selectedImage.url"
                   :cropperStyle="cropperStyle"
                   :aspectRatio="null"
                   :desiredWidth="desiredWidth"
                   :desiredHeight="desiredHeight"
+                  :zoomable="false"
+                  :zoomOnWheel="false"
+                  :movable="false"
                   @ready="onCropReady"
                   @cropped="onCropped"
                 />
@@ -163,8 +184,7 @@
             <div v-if="mode === 'convert'" class="convert-mode">
               <h3 class="sub-title">이미지 포맷 변환</h3>
               <div class="convert-controls">
-                <label
-                  >변환 포맷:
+                <label>변환 포맷:
                   <select v-model="convertedFormat">
                     <option
                       v-for="fmt in availableFormats"
@@ -183,7 +203,7 @@
                 </button>
               </div>
               <div v-if="convertedUrl" class="convert-result">
-                <button class="sub-title-sm">변환된 결과</button>
+                <h4 class="sub-title-sm">변환된 결과</h4>
                 <img
                   :src="convertedUrl"
                   alt="Converted Preview"
@@ -234,6 +254,20 @@ const desiredHeight = ref<number | null>(null);
 const convertedFormat = ref<string>("");
 const convertedUrl = ref<string>("");
 
+// --- 히스토리(Undo/Redo) 관련 상태 ---
+const history = ref<string[]>([]); // Blob URL 또는 Object URL
+const historyIndex = ref<number>(-1);
+
+// --- 변환 가능한 포맷 목록 (원본 제외) ---
+const availableFormats = computed(() =>
+  ["image/png", "image/jpeg", "image/webp", "image/jpg"].filter(
+    (f) => f !== originalFormat.value
+  )
+);
+function formatLabel(fmt: string) {
+  return fmt.split("/")[1].toUpperCase();
+}
+
 // 1) 다중 파일 업로드 핸들러
 function onFilesSelected(files: File[]) {
   files.forEach((file, idx) => {
@@ -265,6 +299,11 @@ function selectImage(idx: number) {
   heightInput.value = null;
   desiredWidth.value = null;
   desiredHeight.value = null;
+
+  // 히스토리 초기화: 원본 이미지 상태 기록
+  history.value = [images.value[idx].url];
+  historyIndex.value = 0;
+
   setConvertedFormat();
 }
 
@@ -279,6 +318,9 @@ function onCropped(blob: Blob) {
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
   croppedBlob.value = blob;
   croppedUrl.value = URL.createObjectURL(blob);
+
+  // 히스토리에 새 상태(크롭된 Blob URL) 추가
+  pushToHistory(croppedUrl.value);
 }
 
 // 5) Crop된 이미지 다운로드
@@ -291,34 +333,37 @@ function downloadCropped() {
   a.click();
 }
 
-// 6) 필터 스타일 전달
+// 6) Undo / Redo 로직
+function pushToHistory(newUrl: string) {
+  // 현재 인덱스가 히스토리 마지막이 아니라면, 뒤의 기록을 모두 버리고 새 기록 삽입
+  if (historyIndex.value < history.value.length - 1) {
+    history.value = history.value.slice(0, historyIndex.value + 1);
+  }
+  history.value.push(newUrl);
+  historyIndex.value = history.value.length - 1;
+}
+
+function undo() {
+  if (historyIndex.value <= 0) return;
+  historyIndex.value -= 1;
+}
+
+function redo() {
+  if (historyIndex.value >= history.value.length - 1) return;
+  historyIndex.value += 1;
+}
+
+// 7) 필터 스타일 전달 (Undo/Redo 시에도 filter 유지)
 const cropperStyle = computed(() => ({
   filter: `brightness(${brightness.value}) contrast(${contrast.value})`,
 }));
 
-// 7) 변환 가능한 포맷 목록 (원본 제외)
-const availableFormats = computed(() =>
-  ["image/png", "image/jpeg", "image/webp", "image/jpg"].filter(
-    (f) => f !== originalFormat.value
-  )
-);
-function formatLabel(fmt: string) {
-  return fmt.split("/")[1].toUpperCase();
-}
-
-// 8) 변환 대상 포맷 초기 설정
-function setConvertedFormat() {
-  const fmts = ["image/png", "image/jpeg", "image/webp", "image/jpg"];
-  convertedFormat.value =
-    fmts.find((f) => f !== originalFormat.value) || fmts[0];
-}
-
-// 9) 포맷 변환
+// 8) 포맷 변환 로직
 async function convertOriginal() {
   if (selectedIndex.value === null) return;
   const imgItem = images.value[selectedIndex.value];
   const img = new Image();
-  img.src = imgItem.url;
+  img.src = history.value[historyIndex.value] || imgItem.url;
   await img.decode();
 
   const canvas = document.createElement("canvas");
@@ -326,18 +371,24 @@ async function convertOriginal() {
   canvas.height = img.naturalHeight;
   const ctx = canvas.getContext("2d")!;
   // 필터 적용하려면 아래 주석 해제
-  // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`
+  // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
   ctx.drawImage(img, 0, 0);
 
-  canvas.toBlob((blob) => {
-    if (blob) {
-      if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
-      convertedUrl.value = URL.createObjectURL(blob);
-    }
-  }, convertedFormat.value);
+  canvas.toBlob(
+    (blob) => {
+      if (blob) {
+        if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
+        convertedUrl.value = URL.createObjectURL(blob);
+
+        // 변환 결과도 히스토리에 추가 (Undo/Redo 대상)
+        pushToHistory(convertedUrl.value);
+      }
+    },
+    convertedFormat.value
+  );
 }
 
-// 10) 다운로드 파일명 계산
+// 9) 다운로드 파일명 계산
 const downloadCroppedName = computed(() => {
   const ext = originalFormat.value.split("/")[1] || "png";
   return `cropped.${ext}`;
@@ -356,7 +407,7 @@ const originalFormatLabel = computed(() =>
   originalFormat.value ? originalFormat.value.split("/")[1].toUpperCase() : ""
 );
 
-// 11) 크롭 박스 크기 적용
+// 10) 크롭 박스 크기 적용
 function applyDimensions() {
   if (widthInput.value && heightInput.value) {
     desiredWidth.value = widthInput.value;
@@ -364,7 +415,7 @@ function applyDimensions() {
   }
 }
 
-// 12) 이미지 제거
+// 11) 이미지 제거
 function removeImage(idx: number) {
   URL.revokeObjectURL(images.value[idx].url);
   images.value.splice(idx, 1);
@@ -374,6 +425,8 @@ function removeImage(idx: number) {
   if (images.value.length === 0) {
     selectedIndex.value = null;
     originalFormat.value = "";
+    history.value = [];
+    historyIndex.value = -1;
   } else {
     selectedIndex.value =
       idx <= images.value.length - 1 ? idx : images.value.length - 1;
@@ -384,11 +437,14 @@ function removeImage(idx: number) {
     heightInput.value = null;
     desiredWidth.value = null;
     desiredHeight.value = null;
+    // 신규 이미지로 히스토리 초기화
+    history.value = [images.value[selectedIndex.value].url];
+    historyIndex.value = 0;
     setConvertedFormat();
   }
 }
 
-// 13) 전체 초기화
+// 12) 전체 초기화
 function resetAll() {
   images.value.forEach((img) => URL.revokeObjectURL(img.url));
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
@@ -407,6 +463,15 @@ function resetAll() {
   heightInput.value = null;
   desiredWidth.value = null;
   desiredHeight.value = null;
+  history.value = [];
+  historyIndex.value = -1;
+}
+
+// 13) 변환 대상 포맷 초기 설정
+function setConvertedFormat() {
+  const fmts = ["image/png", "image/jpeg", "image/webp", "image/jpg"];
+  convertedFormat.value =
+    fmts.find((f) => f !== originalFormat.value) || fmts[0];
 }
 </script>
 
@@ -617,6 +682,34 @@ function resetAll() {
         color: #333;
       }
 
+      /* Undo/Redo 버튼 */
+      .history-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+
+        button {
+          padding: 0.4rem 0.8rem;
+          background: #e0e0e0;
+          border: none;
+          border-radius: 4px;
+          font-size: 0.9rem;
+          color: #333;
+          cursor: pointer;
+          transition: background 0.2s;
+
+          &:disabled {
+            background: #f5f5f5;
+            color: #aaa;
+            cursor: not-allowed;
+          }
+
+          &:not(:disabled):hover {
+            background: #cacaca;
+          }
+        }
+      }
+
       .filter-controls {
         display: flex;
         flex-wrap: wrap;
@@ -676,15 +769,10 @@ function resetAll() {
         align-items: center;
 
         .sub-title-sm {
-          background: #fff540;
-          color: #333;
-          border: none;
-          border-radius: 4px;
-          padding: 0.5rem 1rem;
-          margin-top: 4rem;
           margin-bottom: 0.5rem;
           font-size: 0.95rem;
           font-weight: 500;
+          color: #333;
         }
 
         .preview-img {
