@@ -1,127 +1,203 @@
 <template>
   <div id="app">
-    <h1>AnyIMG (다중 업로드 + 필터 + 자르기/변환)</h1>
-
-    <!-- 1. 업로드 섹션 -->
-    <div v-if="images.length === 0" class="upload-section">
-      <ImageUploader @files-selected="onFilesSelected" />
-    </div>
-
-    <!-- 2. 이미지 목록 (썸네일) 및 선택 -->
-    <div v-else class="thumbnails">
-      <h2>업로드된 이미지 (총 {{ images.length }}장)</h2>
-      <div class="thumb-list">
-        <div
-          v-for="(img, idx) in images"
-          :key="img.id"
-          class="thumb-wrapper"
-          :class="{ selected: idx === selectedIndex }"
-          @click="selectImage(idx)"
-        >
-          <img :src="img.url" alt="Thumbnail" class="thumb-img" />
-          <p class="thumb-name">{{ img.name }}</p>
-        </div>
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="header-content">
+        <h1 class="logo">AnyIMG 편집기</h1>
       </div>
-      <button class="reset-all" @click="resetAll">모두 초기화</button>
-    </div>
+    </header>
 
-    <!-- 3. 선택된 이미지가 있을 때만 편집 UI 표시 -->
-    <div v-if="selectedImage" class="edit-section">
-      <h2>선택된 이미지</h2>
-      <img
-        :src="selectedImage.url"
-        alt="Original Preview"
-        class="original-preview"
-      />
-      <p>원본 포맷: {{ originalFormatLabel }}</p>
+    <!-- 메인 컨테이너 -->
+    <main class="container">
+      <!-- 1. 업로드 섹션 -->
+      <section v-if="images.length === 0" class="card upload-card">
+        <h2 class="section-title">이미지를 업로드하세요</h2>
+        <ImageUploader @files-selected="onFilesSelected" />
+      </section>
 
-      <!-- 모드 탭: 자르기 / 변환 -->
-      <div class="tabs">
-        <button :class="{ active: mode === 'crop' }" @click="mode = 'crop'">
-          자르기
+      <!-- 2. 썸네일 목록 -->
+      <section v-else class="card thumbnails-card">
+        <h2 class="section-title">
+          업로드된 이미지 (총 {{ images.length }}장)
+        </h2>
+        <div class="thumb-list">
+          <div
+            v-for="(img, idx) in images"
+            :key="img.id"
+            class="thumb-wrapper"
+            :class="{ selected: idx === selectedIndex }"
+            @click="selectImage(idx)"
+          >
+            <img :src="img.url" alt="Thumbnail" class="thumb-img" />
+            <p class="thumb-name">{{ img.name }}</p>
+          </div>
+        </div>
+        <button class="btn-secondary reset-all" @click="resetAll">
+          전체 초기화
         </button>
-        <button
-          :class="{ active: mode === 'convert' }"
-          @click="mode = 'convert'"
-        >
-          포맷 변환
-        </button>
-      </div>
+      </section>
 
-      <!-- 3-1. 자르기 모드 -->
-      <div v-if="mode === 'crop'" class="crop-mode">
-        <h3>이미지 자르기</h3>
-        <!-- 필터 슬라이더 (Brightness / Contrast) -->
-        <div class="filter-controls">
-          <label>밝기: {{ (brightness * 100).toFixed(0) }}%</label>
-          <input
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.01"
-            v-model.number="brightness"
-          />
-          <label>대비: {{ (contrast * 100).toFixed(0) }}%</label>
-          <input
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.01"
-            v-model.number="contrast"
-          />
-        </div>
+      <!-- 3. 편집 섹션 -->
+      <section v-if="selectedImage" class="card edit-card">
+        <h2 class="section-title">편집: {{ selectedImage.name }}</h2>
+        <div class="edit-content">
+          <!-- 왼쪽: 원본 프리뷰 & 제거 버튼 -->
+          <div class="original-preview-wrapper">
+            <img
+              :src="selectedImage.url"
+              alt="Original Preview"
+              class="original-preview"
+            />
+            <p class="format-label">원본 포맷: {{ originalFormatLabel }}</p>
+            <button
+              class="btn-secondary remove-selected"
+              @click="removeImage(selectedIndex)"
+            >
+              해당 이미지 제거
+            </button>
+          </div>
 
-        <!-- Cropper.js 래퍼에 key 추가 -->
-        <div class="cropper-wrapper">
-          <ImageCropper
-            :key="selectedImage.url"               
-            :src="selectedImage.url"
-            :cropperStyle="cropperStyle"
-            :aspectRatio="null"
-            @ready="onCropReady"
-            @cropped="onCropped"
-          />
-        </div>
-
-        <div v-if="croppedBlob" class="controls">
-          <h4>크롭된 미리보기 (필터 적용)</h4>
-          <img :src="croppedUrl" alt="Cropped Preview" class="preview" />
-          <button @click="downloadCropped">크롭 다운로드</button>
-        </div>
-      </div>
-
-      <!-- 3-2. 포맷 변환 모드 -->
-      <div v-if="mode === 'convert'" class="convert-mode">
-        <h3>포맷 변환</h3>
-        <p>원본 포맷: {{ originalFormatLabel }}</p>
-        <div class="controls">
-          <label>변환 포맷:
-            <select v-model="convertedFormat">
-              <option
-                v-for="fmt in availableFormats"
-                :key="fmt"
-                :value="fmt"
+          <!-- 오른쪽: 탭 및 에디터 영역 -->
+          <div class="editor-wrapper">
+            <!-- 모드 탭 -->
+            <div class="tabs">
+              <button
+                :class="['tab-button', { active: mode === 'crop' }]"
+                @click="mode = 'crop'"
               >
-                {{ formatLabel(fmt) }}
-              </option>
-            </select>
-          </label>
-          <button @click="convertOriginal">변환하기</button>
-        </div>
-        <div v-if="convertedUrl" class="controls">
-          <h4>변환된 이미지 미리보기</h4>
-          <img :src="convertedUrl" alt="Converted Preview" class="preview" />
-          <a :href="convertedUrl" :download="downloadOriginalName">
-            <button>다운로드</button>
-          </a>
-        </div>
-      </div>
+                자르기
+              </button>
+              <button
+                :class="['tab-button', { active: mode === 'convert' }]"
+                @click="mode = 'convert'"
+              >
+                포맷 변환
+              </button>
+            </div>
 
-      <!-- 3-3. 이미지 선택 초기화 -->
-      <button class="reset-selected" @click="removeImage(selectedIndex)">
-        해당 이미지 제거
-      </button>
-    </div>
+            <!-- 자르기 모드 -->
+            <div v-if="mode === 'crop'" class="crop-mode">
+              <h3 class="sub-title">필터 & 픽셀 지정 크롭</h3>
+
+              <!-- 필터 컨트롤 -->
+              <div class="filter-controls">
+                <div class="filter-group">
+                  <label>밝기: {{ (brightness * 100).toFixed(0) }}%</label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.01"
+                    v-model.number="brightness"
+                  />
+                </div>
+                <div class="filter-group">
+                  <label>대비: {{ (contrast * 100).toFixed(0) }}%</label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.01"
+                    v-model.number="contrast"
+                  />
+                </div>
+              </div>
+
+              <!-- 픽셀 입력 컨트롤 -->
+              <div class="dimension-controls">
+                <div class="dim-group">
+                  <label>가로 픽셀:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    v-model.number="widthInput"
+                    placeholder="ex) 200"
+                  />
+                </div>
+                <div class="dim-group">
+                  <label>세로 픽셀:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    v-model.number="heightInput"
+                    placeholder="ex) 100"
+                  />
+                </div>
+                <button class="btn-primary apply-btn" @click="applyDimensions">
+                  적용
+                </button>
+              </div>
+
+              <!-- Cropper 영역 (desiredWidth/Height prop 전달) -->
+              <div class="cropper-wrapper">
+                <ImageCropper
+                  :key="selectedImage.url"
+                  :src="selectedImage.url"
+                  :cropperStyle="cropperStyle"
+                  :aspectRatio="null"
+                  :desiredWidth="desiredWidth"
+                  :desiredHeight="desiredHeight"
+                  @ready="onCropReady"
+                  @cropped="onCropped"
+                />
+              </div>
+
+              <!-- 크롭 결과 -->
+              <div v-if="croppedBlob" class="crop-result">
+                <h4 class="sub-title-sm">크롭된 결과</h4>
+                <img
+                  :src="croppedUrl"
+                  alt="Cropped Preview"
+                  class="preview-img"
+                />
+                <button
+                  class="btn-primary download-btn"
+                  @click="downloadCropped"
+                >
+                  크롭 다운로드
+                </button>
+              </div>
+            </div>
+
+            <!-- 포맷 변환 모드 -->
+            <div v-if="mode === 'convert'" class="convert-mode">
+              <h3 class="sub-title">이미지 포맷 변환</h3>
+              <div class="convert-controls">
+                <label
+                  >변환 포맷:
+                  <select v-model="convertedFormat">
+                    <option
+                      v-for="fmt in availableFormats"
+                      :key="fmt"
+                      :value="fmt"
+                    >
+                      {{ formatLabel(fmt) }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  class="btn-primary convert-btn"
+                  @click="convertOriginal"
+                >
+                  변환하기
+                </button>
+              </div>
+              <div v-if="convertedUrl" class="convert-result">
+                <button class="sub-title-sm">변환된 결과</button>
+                <img
+                  :src="convertedUrl"
+                  alt="Converted Preview"
+                  class="preview-img"
+                />
+                <a :href="convertedUrl" :download="downloadOriginalName">
+                  <button class="btn-primary download-btn">다운로드</button>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 </template>
 
@@ -150,6 +226,11 @@ const cropData = reactive({ width: 0, height: 0 });
 const brightness = ref<number>(1);
 const contrast = ref<number>(1);
 
+const widthInput = ref<number | null>(null);
+const heightInput = ref<number | null>(null);
+const desiredWidth = ref<number | null>(null);
+const desiredHeight = ref<number | null>(null);
+
 const convertedFormat = ref<string>("");
 const convertedUrl = ref<string>("");
 
@@ -164,24 +245,26 @@ function onFilesSelected(files: File[]) {
       type: file.type,
     });
   });
-  // 첫 번째 업로드 시 자동 선택
   if (selectedIndex.value === null && images.value.length > 0) {
     selectImage(0);
   }
 }
 
-// 2) 썸네일 클릭 시 선택 (밝기/대비도 리셋)
+// 2) 썸네일 클릭 시 선택 (편집 상태 초기화)
 function selectImage(idx: number) {
   selectedIndex.value = idx;
   originalFormat.value = images.value[idx].type;
 
-  // 모드 및 편집 상태 초기화
   mode.value = "crop";
   croppedBlob.value = null;
   croppedUrl.value = "";
   convertedUrl.value = "";
-  brightness.value = 1;    // 밝기 기본값으로 리셋
-  contrast.value = 1;      // 대비 기본값으로 리셋
+  brightness.value = 1;
+  contrast.value = 1;
+  widthInput.value = null;
+  heightInput.value = null;
+  desiredWidth.value = null;
+  desiredHeight.value = null;
   setConvertedFormat();
 }
 
@@ -191,14 +274,14 @@ function onCropReady({ detail }: CustomEvent) {
   cropData.height = detail.height;
 }
 
-// 4) Crop 결과 Blob 수신
+// 4) Crop 결과 수신
 function onCropped(blob: Blob) {
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
   croppedBlob.value = blob;
   croppedUrl.value = URL.createObjectURL(blob);
 }
 
-// 5) Crop된 이미지 다운로드 (원본 포맷 유지)
+// 5) Crop된 이미지 다운로드
 function downloadCropped() {
   if (!croppedUrl.value || selectedIndex.value === null) return;
   const a = document.createElement("a");
@@ -208,7 +291,7 @@ function downloadCropped() {
   a.click();
 }
 
-// 6) 필터 적용용 스타일 (Cropper에 전달)
+// 6) 필터 스타일 전달
 const cropperStyle = computed(() => ({
   filter: `brightness(${brightness.value}) contrast(${contrast.value})`,
 }));
@@ -230,7 +313,7 @@ function setConvertedFormat() {
     fmts.find((f) => f !== originalFormat.value) || fmts[0];
 }
 
-// 9) 원본 이미지 변환
+// 9) 포맷 변환
 async function convertOriginal() {
   if (selectedIndex.value === null) return;
   const imgItem = images.value[selectedIndex.value];
@@ -242,27 +325,23 @@ async function convertOriginal() {
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
   const ctx = canvas.getContext("2d")!;
-  // 필터를 변환 결과에 적용하려면 아래 주석 해제
-  // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
+  // 필터 적용하려면 아래 주석 해제
+  // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`
   ctx.drawImage(img, 0, 0);
 
-  canvas.toBlob(
-    (blob) => {
-      if (blob) {
-        if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
-        convertedUrl.value = URL.createObjectURL(blob);
-      }
-    },
-    convertedFormat.value
-  );
+  canvas.toBlob((blob) => {
+    if (blob) {
+      if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
+      convertedUrl.value = URL.createObjectURL(blob);
+    }
+  }, convertedFormat.value);
 }
 
-// 10) Crop 모드용 다운로드 파일명
+// 10) 다운로드 파일명 계산
 const downloadCroppedName = computed(() => {
   const ext = originalFormat.value.split("/")[1] || "png";
   return `cropped.${ext}`;
 });
-// 11) Convert 모드용 다운로드 파일명
 const downloadOriginalName = computed(() => {
   const ext = convertedFormat.value.split("/")[1] || "img";
   return `converted.${ext}`;
@@ -277,7 +356,15 @@ const originalFormatLabel = computed(() =>
   originalFormat.value ? originalFormat.value.split("/")[1].toUpperCase() : ""
 );
 
-// 14) 개별 이미지 제거
+// 11) 크롭 박스 크기 적용
+function applyDimensions() {
+  if (widthInput.value && heightInput.value) {
+    desiredWidth.value = widthInput.value;
+    desiredHeight.value = heightInput.value;
+  }
+}
+
+// 12) 이미지 제거
 function removeImage(idx: number) {
   URL.revokeObjectURL(images.value[idx].url);
   images.value.splice(idx, 1);
@@ -293,11 +380,15 @@ function removeImage(idx: number) {
     originalFormat.value = images.value[selectedIndex.value].type;
     brightness.value = 1;
     contrast.value = 1;
+    widthInput.value = null;
+    heightInput.value = null;
+    desiredWidth.value = null;
+    desiredHeight.value = null;
     setConvertedFormat();
   }
 }
 
-// 15) 전체 초기화
+// 13) 전체 초기화
 function resetAll() {
   images.value.forEach((img) => URL.revokeObjectURL(img.url));
   if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
@@ -312,304 +403,483 @@ function resetAll() {
   convertedFormat.value = "";
   brightness.value = 1;
   contrast.value = 1;
+  widthInput.value = null;
+  heightInput.value = null;
+  desiredWidth.value = null;
+  desiredHeight.value = null;
 }
 </script>
 
 <style lang="scss" scoped>
+/* 전체 배경 */
 #app {
+  background: #f5f5f5;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  color: #333;
+}
+
+/* 헤더 */
+.header {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+
+  .header-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin: 0;
+    color: #409eff;
+  }
+}
+
+/* 메인 컨테이너 */
+.container {
   max-width: 800px;
-  margin: 2rem auto;
-  text-align: center;
-  padding: 0 1rem; /* 좌우 여백 추가 */
+  margin: 1rem auto 2rem;
+  padding: 0 1rem;
+}
 
-  h1 {
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
+/* 카드 공통 */
+.card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+}
+
+/* 섹션 제목 */
+.section-title {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 버튼 스타일 */
+.btn-primary,
+.btn-secondary {
+  font-size: 0.9rem;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-primary {
+  background: #409eff;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #66b1ff;
+  }
+}
+
+.btn-secondary {
+  background: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #cacaca;
+  }
+}
+
+/* 썸네일 목록 */
+.thumbnails-card {
+  .thumb-list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    -webkit-overflow-scrolling: touch;
   }
 
-  /* 1. 업로드 섹션 */
-  .upload-section {
-    margin: 2rem 0;
-  }
+  .thumb-wrapper {
+    flex: 0 0 auto;
+    width: 100px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    padding: 0.3rem;
+    transition: border-color 0.2s;
+    text-align: center;
 
-  /* 2. 썸네일 목록 */
-  .thumbnails {
-    margin-bottom: 2rem;
-
-    h2 {
-      margin-bottom: 1rem;
-      font-size: 1.2rem;
+    &.selected {
+      border-color: #409eff;
     }
 
-    .thumb-list {
-      display: flex;
-      flex-wrap: nowrap; /* 모바일에서는 가로 스크롤 */
-      gap: 0.5rem;
-      justify-content: flex-start;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .thumb-wrapper {
-      flex: 0 0 auto; /* 고정 너비 */
-      width: 100px;
-      cursor: pointer;
-      border: 2px solid transparent;
+    .thumb-img {
+      width: 100%;
+      height: auto;
+      border: 1px solid #ddd;
       border-radius: 4px;
-      padding: 0.3rem;
-      transition: border-color 0.2s;
-      text-align: center;
-
-      &.selected {
-        border-color: #409eff;
-      }
-
-      .thumb-img {
-        width: 100%;
-        height: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
-
-      .thumb-name {
-        margin-top: 0.3rem;
-        font-size: 0.75rem;
-        word-break: break-word;
-      }
     }
 
-    .reset-all {
-      margin-top: 1rem;
-      padding: 0.4rem 0.8rem;
-      background: #ddd;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.9rem;
-
-      &:hover {
-        background: #ccc;
-      }
+    .thumb-name {
+      margin-top: 0.3rem;
+      font-size: 0.75rem;
+      word-break: break-word;
     }
   }
 
-  /* 3. 편집 섹션 */
-  .edit-section {
-    margin-bottom: 2rem;
-    position: relative;
+  .reset-all {
+    margin-top: 1rem;
+  }
+}
+
+/* 편집 섹션 */
+.edit-content {
+  display: flex;
+  gap: 1.5rem;
+
+  /* 왼쪽: 원본 프리뷰 */
+  .original-preview-wrapper {
+    flex: 0 0 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 
     .original-preview {
-      max-width: 200px;
       width: 100%;
       border: 1px solid #ddd;
-      margin: 0 auto 1rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
     }
+
+    .format-label {
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      color: #555;
+    }
+
+    .remove-selected {
+      width: 100%;
+    }
+  }
+
+  /* 오른쪽: 탭 & 편집 UI */
+  .editor-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 
     .tabs {
       display: flex;
-      justify-content: center;
       gap: 1rem;
       margin-bottom: 1rem;
 
-      button {
-        padding: 0.4rem 0.8rem;
+      .tab-button {
+        flex: 1;
+        text-align: center;
+        padding: 0.5rem;
+        background: #f0f0f0;
         border: none;
-        cursor: pointer;
-        font-size: 0.9rem;
         border-radius: 4px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: background 0.2s;
 
         &.active {
           background: #409eff;
           color: #fff;
         }
-      }
-    }
 
-    /* 자르기 모드 & 변환 모드 공통 */
-    .crop-mode,
-    .convert-mode {
-      margin-bottom: 1.5rem;
-
-      .controls {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-        margin-top: 1rem;
-
-        .preview {
-          max-width: 100%;
-          width: 250px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-        }
-
-        button {
-          padding: 0.5rem 1rem;
-          background: #409eff;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 0.9rem;
-
-          &:hover {
-            background: #66b1ff;
-          }
-        }
-
-        select {
-          padding: 0.3rem;
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          font-size: 0.9rem;
+        &:hover {
+          background: #e0e0e0;
         }
       }
     }
 
-    /* 자르기 모드 전용 */
+    /* 자르기 모드 */
     .crop-mode {
+      .sub-title {
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #333;
+      }
+
       .filter-controls {
         display: flex;
-        justify-content: center;
-        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+
+        .filter-group {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.25rem;
+          font-size: 0.9rem;
+
+          input[type="range"] {
+            width: 120px;
+          }
+        }
+      }
+
+      /* 픽셀 입력 컨트롤 */
+      .dimension-controls {
+        display: flex;
         gap: 1rem;
         margin-bottom: 1rem;
         flex-wrap: wrap;
 
-        label {
+        .dim-group {
           display: flex;
-          align-items: center;
-          gap: 0.5rem;
+          flex-direction: column;
+          gap: 0.25rem;
           font-size: 0.9rem;
 
-          input[type="range"] {
+          input[type="number"] {
             width: 100px;
+            padding: 0.25rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
           }
+        }
 
-          & + label {
-            margin-left: 0; /* 모바일에서 자동 줄바꿈을 위해 margin 제거 */
-          }
+        .apply-btn {
+          align-self: flex-end;
+          padding: 0.4rem 0.8rem;
         }
       }
 
       .cropper-wrapper {
-        max-width: 100%;
         width: 100%;
-        height: auto;
-        margin: 0 auto;
-      }
-    }
-
-    /* 변환 모드 전용 */
-    .convert-mode {
-      .controls {
+        height: 400px;
         margin-bottom: 1rem;
       }
+
+      .crop-result {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        .sub-title-sm {
+          background: #fff540;
+          color: #333;
+          border: none;
+          border-radius: 4px;
+          padding: 0.5rem 1rem;
+          margin-top: 4rem;
+          margin-bottom: 0.5rem;
+          font-size: 0.95rem;
+          font-weight: 500;
+        }
+
+        .preview-img {
+          width: 100%;
+          max-width: 300px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          margin-bottom: 0.75rem;
+        }
+
+        .download-btn {
+          width: 100%;
+        }
+      }
     }
 
-    .reset-selected {
-      position: absolute;
-      top: 0.5rem;
-      right: 0.5rem;
-      padding: 0.3rem 0.6rem;
-      background: #ddd;
-      border: none;
-      cursor: pointer;
-      font-size: 0.8rem;
-      border-radius: 4px;
+    /* 변환 모드 */
+    .convert-mode {
+      .sub-title {
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #333;
+      }
 
-      &:hover {
-        background: #ccc;
+      .convert-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+
+        label {
+          font-size: 0.9rem;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.25rem;
+
+          select {
+            padding: 0.3rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+          }
+        }
+
+        .convert-btn {
+          align-self: flex-start;
+        }
+      }
+
+      .convert-result {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        .sub-title-sm {
+          margin-bottom: 0.5rem;
+          font-size: 0.95rem;
+          font-weight: 500;
+        }
+
+        .preview-img {
+          width: 100%;
+          max-width: 300px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          margin-bottom: 0.75rem;
+        }
+
+        .download-btn {
+          width: 100%;
+        }
       }
     }
   }
 
-  /* -----------------------------------
-     미디어 쿼리: 모바일 대응 (최대 폭 600px)
-     ----------------------------------- */
-  @media screen and (max-width: 600px) {
-    #app {
-      padding: 0 0.5rem;
+  .reset-selected {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+}
 
-      h1 {
-        font-size: 1.25rem;
+/* 모바일 대응 (600px 이하) */
+@media screen and (max-width: 600px) {
+  .container {
+    margin: 1rem auto;
+    padding: 0 0.5rem;
+  }
+
+  /* 썸네일 */
+  .thumbnails-card {
+    .thumb-wrapper {
+      width: 80px;
+
+      .thumb-name {
+        font-size: 0.7rem;
+      }
+    }
+
+    .reset-all {
+      font-size: 0.8rem;
+    }
+  }
+
+  /* 편집 섹션을 세로로 */
+  .edit-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+
+    .original-preview-wrapper {
+      width: 100%;
+      max-width: 180px;
+
+      .original-preview {
+        max-width: 100%;
+      }
+    }
+
+    .editor-wrapper {
+      width: 100%;
+
+      .tabs {
+        gap: 0.5rem;
+
+        .tab-button {
+          padding: 0.4rem 0.6rem;
+          font-size: 0.85rem;
+        }
       }
 
-      /* 썸네일 크기 줄이기 */
-      .thumbnails {
-        .thumb-wrapper {
-          width: 80px;
+      .crop-mode {
+        .filter-controls {
+          flex-direction: column;
+          gap: 0.5rem;
 
-          .thumb-name {
-            font-size: 0.7rem;
+          .filter-group input[type="range"] {
+            width: 100px;
           }
         }
 
-        .reset-all {
-          font-size: 0.8rem;
-        }
-      }
+        .dimension-controls {
+          flex-direction: column;
+          gap: 0.75rem;
 
-      /* 편집 섹션 */
-      .edit-section {
-        .original-preview {
-          max-width: 150px;
-        }
+          .dim-group input[type="number"] {
+            width: 100px;
+            font-size: 0.85rem;
+          }
 
-        .tabs {
-          flex-wrap: wrap;
-          gap: 0.5rem;
-
-          button {
-            padding: 0.3rem 0.6rem;
+          .apply-btn {
+            width: 100%;
             font-size: 0.85rem;
           }
         }
 
-        /* 자르기 모드 */
-        .crop-mode {
-          .filter-controls {
-            flex-direction: column;
-            gap: 0.5rem;
-
-            label {
-              font-size: 0.85rem;
-
-              input[type="range"] {
-                width: 80px;
-              }
-            }
-          }
-
-          .cropper-wrapper {
-            height: 300px;
-          }
+        .cropper-wrapper {
+          height: 300px;
         }
 
-        /* 변환 모드 */
-        .convert-mode {
-          .controls {
-            gap: 0.5rem;
-
-            select {
-              font-size: 0.85rem;
-            }
-
-            button {
-              font-size: 0.85rem;
-            }
-          }
-        }
-
-        .reset-selected {
-          top: 0.3rem;
-          right: 0.3rem;
-          font-size: 0.75rem;
-          padding: 0.2rem 0.4rem;
+        .crop-result .preview-img {
+          max-width: 250px;
         }
       }
+
+      .convert-mode {
+        .convert-controls {
+          flex-direction: column;
+          gap: 0.75rem;
+
+          label select {
+            font-size: 0.85rem;
+          }
+
+          .convert-btn {
+            width: 100%;
+            font-size: 0.85rem;
+          }
+        }
+
+        .convert-result .preview-img {
+          max-width: 250px;
+        }
+      }
+    }
+
+    .reset-selected {
+      top: 0.5rem;
+      right: 0.5rem;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
     }
   }
 }

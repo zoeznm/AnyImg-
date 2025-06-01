@@ -1,6 +1,6 @@
 <template>
   <div class="image-cropper-wrapper">
-    <!-- cropperStyle prop을 상위에서 받아서 스타일로 바인딩 -->
+    <!-- Cropper 컨테이너에 cropperStyle을 적용하고, ref로 인스턴스를 잡아둠 -->
     <div :style="cropperStyle" class="cropper-container">
       <vue-cropper
         ref="cropper"
@@ -13,6 +13,7 @@
         :background="false"
         :responsive="true"
         class="cropper"
+        @ready="onReady"
       />
     </div>
     <button class="crop-button" @click="cropImage">이미지 자르기</button>
@@ -20,32 +21,69 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, defineProps, defineEmits } from "vue";
-import VueCropper from "vue-cropperjs";
+import { ref, watch, defineProps, defineEmits } from 'vue'
+import VueCropper from 'vue-cropperjs'
 
-// Props: src, aspectRatio, 그리고 새로 추가된 cropperStyle
+// 부모로부터 받을 props 선언
 const props = defineProps<{
-  src: string;
-  aspectRatio: number | null;
-  cropperStyle?: Record<string, string>;
-}>();
+  src: string
+  aspectRatio: number | null
+  cropperStyle?: Record<string, string>
+  desiredWidth: number | null
+  desiredHeight: number | null
+}>()
 
 const emit = defineEmits<{
-  (e: "cropped", blob: Blob): void;
-}>();
+  (e: 'cropped', blob: Blob): void
+}>()
 
-const cropper = ref<InstanceType<typeof VueCropper> | null>(null);
+// Cropper.js 인스턴스를 잡을 ref
+const cropper = ref<InstanceType<typeof VueCropper> | null>(null)
 
-function cropImage() {
-  if (!cropper.value) return;
-  const canvas = cropper.value.getCroppedCanvas();
-  canvas.toBlob((blob) => {
-    if (blob) emit("cropped", blob);
-  }, "image/jpeg");
+/** ready 이벤트 핸들러:
+ *  - 초기 로딩 시 점점 크롭 박스가 잡히면, 부모가 원하는 크기가 있다면 반영
+ */
+function onReady() {
+  applyDesiredBox()
 }
 
-function onReady(e: CustomEvent) {
-  // 필요 시 ready 이벤트 활용 (이미 App.vue에서 handle)
+/** 부모로부터 받은 desiredWidth/Height가 바뀔 때마다 호출 */
+watch(
+  () => [props.desiredWidth, props.desiredHeight],
+  () => {
+    applyDesiredBox()
+  }
+)
+
+/** 실제로 Cropper.js 인스턴스에 setCropBoxData를 호출하여 크롭 박스 조정 */
+function applyDesiredBox() {
+  if (!cropper.value) return
+  const dw = props.desiredWidth
+  const dh = props.desiredHeight
+  if (dw && dh) {
+    // 현재 이미지의 natural 크기를 가져옴
+    const imageData = cropper.value.getImageData()
+    // 중앙에 박스를 위치시키기 위해 left/top 계산
+    const left = (imageData.naturalWidth - dw) / 2
+    const top = (imageData.naturalHeight - dh) / 2
+
+    // Cropper.js API 호출: setCropBoxData
+    cropper.value.setCropBoxData({
+      left: left < 0 ? 0 : left,
+      top: top < 0 ? 0 : top,
+      width: dw,
+      height: dh,
+    })
+  }
+}
+
+/** “이미지 자르기” 버튼 클릭 시, getCroppedCanvas → Blob 생성하여 부모에 emit */
+function cropImage() {
+  if (!cropper.value) return
+  const canvas = cropper.value.getCroppedCanvas()
+  canvas.toBlob((blob) => {
+    if (blob) emit('cropped', blob)
+  }, 'image/jpeg')
 }
 </script>
 
@@ -60,7 +98,7 @@ function onReady(e: CustomEvent) {
     width: 100%;
     max-width: 700px;
     height: 400px;
-    /* 이제 App.vue에서 전달한 filter(cropperStyle)가 적용됩니다 */
+    /* App.vue에서 전달한 filter가 적용됨 */
   }
 
   .cropper {
@@ -70,12 +108,13 @@ function onReady(e: CustomEvent) {
 
   .crop-button {
     margin-top: 1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1.2rem;
     background-color: #409eff;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-size: 0.95rem;
     &:hover {
       background-color: #66b1ff;
     }
