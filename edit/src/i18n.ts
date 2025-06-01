@@ -8,6 +8,7 @@ const messages = {
     uploadPrompt: '이미지를 업로드하세요',
     totalImages: '업로드된 이미지 (총 {count}장)',
     resetAll: '전체 초기화',
+    triggerFileInput :"이미지 선택하기",
     addMore: '이미지 추가 업로드',
     edit: '편집: {name}',
     originalFormat: '원본 포맷: {format}',
@@ -35,6 +36,7 @@ const messages = {
   },
   en: {
     appTitle: 'AnyIMG Editor',
+    triggerFileInput :"Upload images",
     uploadPrompt: 'Upload your images',
     totalImages: 'Uploaded images (total {count})',
     resetAll: 'Reset All',

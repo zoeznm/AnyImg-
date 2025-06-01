@@ -3,7 +3,12 @@
     <!-- 헤더 -->
     <header class="header">
       <div class="header-content">
-        <h1 class="logo">AnyIMG 편집기</h1>
+        <h1 class="logo">{{ $t('appTitle') }}</h1>
+        <!-- 언어 선택 드롭다운 -->
+        <select v-model="currentLocale" @change="changeLocale" class="locale-switcher">
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+        </select>
       </div>
     </header>
 
@@ -11,15 +16,53 @@
     <main class="container">
       <!-- 1. 업로드 섹션 -->
       <section v-if="images.length === 0" class="card upload-card">
-        <h2 class="section-title">이미지를 업로드하세요</h2>
+        <h2 class="section-title">{{ $t('uploadPrompt') }}</h2>
         <ImageUploader @files-selected="onFilesSelected" />
       </section>
 
-      <!-- 2. 썸네일 목록 -->
+      <!-- 2. 썸네일 목록 + 배치 처리 -->
       <section v-else class="card thumbnails-card">
         <h2 class="section-title">
-          업로드된 이미지 (총 {{ images.length }}장)
+          {{ $t('totalImages', { count: images.length }) }}
         </h2>
+
+        <!-- 배치 선택 컨트롤 -->
+        <div class="batch-controls">
+          <button class="btn-secondary" @click="selectAll">
+            {{ allSelected ? $t('deselectAll') : $t('selectAll') }}
+          </button>
+          <button
+            class="btn-primary"
+            :disabled="selectedBatch.length === 0"
+            @click="applyBatchCrop"
+          >
+            {{ $t('applyBatchCrop') }}
+          </button>
+          <button
+            class="btn-primary"
+            :disabled="selectedBatch.length === 0"
+            @click="applyBatchConvert"
+          >
+            {{ $t('applyBatchConvert') }}
+          </button>
+          <!-- 일괄 Undo/Redo 버튼 -->
+          <button
+            class="btn-secondary"
+            :disabled="batchUndoDisabled"
+            @click="applyBatchUndo"
+          >
+            {{ $t('undo') }}
+          </button>
+          <button
+            class="btn-secondary"
+            :disabled="batchRedoDisabled"
+            @click="applyBatchRedo"
+          >
+            {{ $t('redo') }}
+          </button>
+        </div>
+
+        <!-- 썸네일 목록 (각 썸네일에 체크박스 추가) -->
         <div class="thumb-list">
           <div
             v-for="(img, idx) in images"
@@ -28,21 +71,33 @@
             :class="{ selected: idx === selectedIndex }"
             @click="selectImage(idx)"
           >
+            <input
+              type="checkbox"
+              class="batch-checkbox"
+              :checked="selectedBatch.includes(idx)"
+              @click.stop="toggleBatchSelection(idx)"
+            />
             <img :src="img.url" alt="Thumbnail" class="thumb-img" />
             <p class="thumb-name">{{ img.name }}</p>
           </div>
         </div>
-        <button class="btn-secondary reset-all" @click="resetAll">
-          전체 초기화
-        </button>
-        <div class="add-upload">
-          <ImageUploader @files-selected="onFilesSelected" />
+
+        <!-- 전체 초기화 + 추가 업로드 -->
+        <div class="footer-controls">
+          <button class="btn-secondary reset-all" @click="resetAll">
+            {{ $t('resetAll') }}
+          </button>
+          <div class="add-upload">
+            <ImageUploader @files-selected="onFilesSelected" />
+          </div>
         </div>
       </section>
 
       <!-- 3. 편집 섹션 -->
       <section v-if="selectedImage" class="card edit-card">
-        <h2 class="section-title">편집: {{ selectedImage.name }}</h2>
+        <h2 class="section-title">
+          {{ $t('edit', { name: selectedImage.name }) }}
+        </h2>
         <div class="edit-content">
           <!-- 왼쪽: 원본 프리뷰 & 제거 버튼 -->
           <div class="original-preview-wrapper">
@@ -51,12 +106,14 @@
               alt="Original Preview"
               class="original-preview"
             />
-            <p class="format-label">원본 포맷: {{ originalFormatLabel }}</p>
+            <p class="format-label">
+              {{ $t('originalFormat', { format: originalFormatLabel }) }}
+            </p>
             <button
               class="btn-secondary remove-selected"
               @click="removeImage(selectedIndex)"
             >
-              해당 이미지 제거
+              {{ $t('removeImage') }}
             </button>
           </div>
 
@@ -68,42 +125,42 @@
                 :class="['tab-button', { active: mode === 'crop' }]"
                 @click="mode = 'crop'"
               >
-                자르기
+                {{ $t('tabCrop') }}
               </button>
               <button
                 :class="['tab-button', { active: mode === 'convert' }]"
                 @click="mode = 'convert'"
               >
-                포맷 변환
+                {{ $t('tabConvert') }}
               </button>
             </div>
 
             <!-- 자르기 모드 -->
             <div v-if="mode === 'crop'" class="crop-mode">
-              <h3 class="sub-title">필터 & 픽셀 지정 크롭</h3>
+              <h3 class="sub-title">{{ $t('tabCrop') }}</h3>
 
-              <!-- 3-1. Undo / Redo 버튼 -->
+              <!-- Undo / Redo -->
               <div class="history-controls">
                 <button
                   class="btn-secondary"
-                  :disabled="historyIndex <= 0"
+                  :disabled="undoDisabled"
                   @click="undo"
                 >
-                  Undo
+                  {{ $t('undo') }}
                 </button>
                 <button
                   class="btn-secondary"
-                  :disabled="historyIndex >= history.length - 1"
+                  :disabled="redoDisabled"
                   @click="redo"
                 >
-                  Redo
+                  {{ $t('redo') }}
                 </button>
               </div>
 
               <!-- 필터 컨트롤 -->
               <div class="filter-controls">
                 <div class="filter-group">
-                  <label>밝기: {{ (brightness * 100).toFixed(0) }}%</label>
+                  <label>{{ $t('brightness', { percent: (brightness * 100).toFixed(0) }) }}</label>
                   <input
                     type="range"
                     min="0.5"
@@ -113,7 +170,7 @@
                   />
                 </div>
                 <div class="filter-group">
-                  <label>대비: {{ (contrast * 100).toFixed(0) }}%</label>
+                  <label>{{ $t('contrast', { percent: (contrast * 100).toFixed(0) }) }}</label>
                   <input
                     type="range"
                     min="0.5"
@@ -127,7 +184,7 @@
               <!-- 픽셀 입력 컨트롤 -->
               <div class="dimension-controls">
                 <div class="dim-group">
-                  <label>가로 픽셀:</label>
+                  <label>{{ $t('widthPixels') }}</label>
                   <input
                     type="number"
                     min="1"
@@ -136,7 +193,7 @@
                   />
                 </div>
                 <div class="dim-group">
-                  <label>세로 픽셀:</label>
+                  <label>{{ $t('heightPixels') }}</label>
                   <input
                     type="number"
                     min="1"
@@ -145,15 +202,15 @@
                   />
                 </div>
                 <button class="btn-primary apply-btn" @click="applyDimensions">
-                  적용
+                  {{ $t('apply') }}
                 </button>
               </div>
 
-              <!-- Cropper 영역 (desiredWidth/Height prop 전달) -->
+              <!-- Cropper 영역 -->
               <div class="cropper-wrapper">
                 <ImageCropper
-                  :key="selectedImage.url + (history[historyIndex] || '')"
-                  :src="history[historyIndex] || selectedImage.url"
+                  :key="selectedImage.url + (historyMap[selectedIndex]?.[historyIndexMap[selectedIndex]!] || '')"
+                  :src="historyMap[selectedIndex]?.[historyIndexMap[selectedIndex]!] || selectedImage.url"
                   :cropperStyle="cropperStyle"
                   :aspectRatio="null"
                   :desiredWidth="desiredWidth"
@@ -168,7 +225,7 @@
 
               <!-- 크롭 결과 -->
               <div v-if="croppedBlob" class="crop-result">
-                <h4 class="sub-title-sm">크롭된 결과</h4>
+                <h4 class="sub-title-sm">{{ $t('cropResult') }}</h4>
                 <img
                   :src="croppedUrl"
                   alt="Cropped Preview"
@@ -178,17 +235,17 @@
                   class="btn-primary download-btn"
                   @click="downloadCropped"
                 >
-                  크롭 다운로드
+                  {{ $t('downloadCrop') }}
                 </button>
               </div>
             </div>
 
             <!-- 포맷 변환 모드 -->
             <div v-if="mode === 'convert'" class="convert-mode">
-              <h3 class="sub-title">이미지 포맷 변환</h3>
+              <h3 class="sub-title">{{ $t('tabConvert') }}</h3>
               <div class="convert-controls">
-                <label
-                  >변환 포맷:
+                <label>
+                  {{ $t('tabConvert') }}:
                   <select v-model="convertedFormat">
                     <option
                       v-for="fmt in availableFormats"
@@ -199,22 +256,21 @@
                     </option>
                   </select>
                 </label>
-                <button
-                  class="btn-primary convert-btn"
-                  @click="convertOriginal"
-                >
-                  변환하기
+                <button class="btn-primary convert-btn" @click="convertOriginal">
+                  {{ $t('apply') }}
                 </button>
               </div>
               <div v-if="convertedUrl" class="convert-result">
-                <h4 class="sub-title-sm">변환된 결과</h4>
+                <h4 class="sub-title-sm">{{ $t('convertResult') }}</h4>
                 <img
                   :src="convertedUrl"
                   alt="Converted Preview"
                   class="preview-img"
                 />
                 <a :href="convertedUrl" :download="downloadOriginalName">
-                  <button class="btn-primary download-btn">다운로드</button>
+                  <button class="btn-primary download-btn">
+                    {{ $t('downloadConverted') }}
+                  </button>
                 </a>
               </div>
             </div>
@@ -226,253 +282,493 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed } from "vue";
-import ImageUploader from "./components/ImageUploader.vue";
-import ImageCropper from "./components/ImageCropper.vue";
+import { ref, reactive, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import ImageUploader from './components/ImageUploader.vue'
+import ImageCropper from './components/ImageCropper.vue'
+
+const { locale, t } = useI18n()
+const currentLocale = ref(locale.value)
+function changeLocale() {
+  locale.value = currentLocale.value
+}
 
 // --- 상태 정의 ---
 interface ImgItem {
-  id: number;
-  url: string;
-  name: string;
-  type: string;
+  id: number
+  url: string
+  name: string
+  type: string
 }
-const images = ref<ImgItem[]>([]);
-const selectedIndex = ref<number | null>(null);
+const images = ref<ImgItem[]>([])
+const selectedIndex = ref<number | null>(null)
+const selectedBatch = ref<number[]>([]) // 배치 처리 대상 인덱스 배열
 
-const originalFormat = ref<string>("");
+const originalFormat = ref<string>('')
 
-const mode = ref<"crop" | "convert">("crop");
-const croppedBlob = ref<Blob | null>(null);
-const croppedUrl = ref<string>("");
-const cropData = reactive({ width: 0, height: 0 });
+const mode = ref<'crop' | 'convert'>('crop')
+const croppedBlob = ref<Blob | null>(null)
+const croppedUrl = ref<string>('')
+const cropData = reactive({ width: 0, height: 0 })
 
-const brightness = ref<number>(1);
-const contrast = ref<number>(1);
+const brightness = ref<number>(1)
+const contrast = ref<number>(1)
 
-const widthInput = ref<number | null>(null);
-const heightInput = ref<number | null>(null);
-const desiredWidth = ref<number | null>(null);
-const desiredHeight = ref<number | null>(null);
+const widthInput = ref<number | null>(null)
+const heightInput = ref<number | null>(null)
+const desiredWidth = ref<number | null>(null)
+const desiredHeight = ref<number | null>(null)
 
-const convertedFormat = ref<string>("");
-const convertedUrl = ref<string>("");
+const convertedFormat = ref<string>('')
+const convertedUrl = ref<string>('')
 
 // --- 히스토리(Undo/Redo) 관련 상태 ---
-const history = ref<string[]>([]); // Blob URL 또는 Object URL
-const historyIndex = ref<number>(-1);
+// 이미지별 히스토리 맵: idx → URL 배열
+const historyMap = reactive<Record<number, string[]>>({})
+// 이미지별 히스토리 인덱스 맵: idx → 현재 인덱스
+const historyIndexMap = reactive<Record<number, number>>({})
 
 // --- 변환 가능한 포맷 목록 (원본 제외) ---
 const availableFormats = computed(() =>
-  ["image/png", "image/jpeg", "image/webp", "image/jpg"].filter(
+  ['image/png', 'image/jpeg', 'image/webp', 'image/jpg'].filter(
     (f) => f !== originalFormat.value
   )
-);
+)
 function formatLabel(fmt: string) {
-  return fmt.split("/")[1].toUpperCase();
+  return fmt.split('/')[1].toUpperCase()
 }
 
 // 1) 다중 파일 업로드 핸들러
 function onFilesSelected(files: File[]) {
   files.forEach((file, idx) => {
-    const id = Date.now() + idx;
+    const id = Date.now() + idx
+    const url = URL.createObjectURL(file)
     images.value.push({
       id,
-      url: URL.createObjectURL(file),
+      url,
       name: file.name,
       type: file.type,
-    });
-  });
+    })
+    // 히스토리 맵 초기화: 새로 추가된 이미지의 히스토리와 인덱스 세팅
+    const newIdx = images.value.length - 1
+    historyMap[newIdx] = [url]
+    historyIndexMap[newIdx] = 0
+  })
   if (selectedIndex.value === null && images.value.length > 0) {
-    selectImage(0);
+    selectImage(0)
   }
 }
 
 // 2) 썸네일 클릭 시 선택 (편집 상태 초기화)
 function selectImage(idx: number) {
-  selectedIndex.value = idx;
-  originalFormat.value = images.value[idx].type;
+  selectedIndex.value = idx
+  originalFormat.value = images.value[idx].type
 
-  mode.value = "crop";
-  croppedBlob.value = null;
-  croppedUrl.value = "";
-  convertedUrl.value = "";
-  brightness.value = 1;
-  contrast.value = 1;
-  widthInput.value = null;
-  heightInput.value = null;
-  desiredWidth.value = null;
-  desiredHeight.value = null;
+  mode.value = 'crop'
+  croppedBlob.value = null
+  croppedUrl.value = ''
+  convertedUrl.value = ''
+  brightness.value = 1
+  contrast.value = 1
+  widthInput.value = null
+  heightInput.value = null
+  desiredWidth.value = null
+  desiredHeight.value = null
 
-  // 히스토리 초기화: 원본 이미지 상태 기록
-  history.value = [images.value[idx].url];
-  historyIndex.value = 0;
-
-  setConvertedFormat();
+  // 히스토리가 historyMap[idx]에 이미 저장되어 있으므로 별도 초기화는 필요 없음
+  setConvertedFormat()
 }
 
-// 3) Cropper 준비 완료
-function onCropReady({ detail }: CustomEvent) {
-  cropData.width = detail.width;
-  cropData.height = detail.height;
-}
-
-// 4) Crop 결과 수신
-function onCropped(blob: Blob) {
-  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
-  croppedBlob.value = blob;
-  croppedUrl.value = URL.createObjectURL(blob);
-
-  // 히스토리에 새 상태(크롭된 Blob URL) 추가
-  pushToHistory(croppedUrl.value);
-}
-
-// 5) Crop된 이미지 다운로드
-function downloadCropped() {
-  if (!croppedUrl.value || selectedIndex.value === null) return;
-  const a = document.createElement("a");
-  a.href = croppedUrl.value;
-  const ext = originalFormat.value.split("/")[1] || "png";
-  a.download = `cropped.${ext}`;
-  a.click();
-}
-
-// 6) Undo / Redo 로직
-function pushToHistory(newUrl: string) {
-  // 현재 인덱스가 히스토리 마지막이 아니라면, 뒤의 기록을 모두 버리고 새 기록 삽입
-  if (historyIndex.value < history.value.length - 1) {
-    history.value = history.value.slice(0, historyIndex.value + 1);
+// 3) 배치 선택 토글
+function toggleBatchSelection(idx: number) {
+  const i = selectedBatch.value.indexOf(idx)
+  if (i === -1) {
+    selectedBatch.value.push(idx)
+  } else {
+    selectedBatch.value.splice(i, 1)
   }
-  history.value.push(newUrl);
-  historyIndex.value = history.value.length - 1;
 }
+const allSelected = computed(() => {
+  return (
+    images.value.length > 0 &&
+    selectedBatch.value.length === images.value.length
+  )
+})
+function selectAll() {
+  if (allSelected.value) {
+    selectedBatch.value = []
+  } else {
+    selectedBatch.value = images.value.map((_, i) => i)
+  }
+}
+
+// 해당 idx에 대해 히스토리 추가
+function pushToHistory(idx: number, newUrl: string) {
+  const arr = historyMap[idx]
+  const currentIdx = historyIndexMap[idx]
+  if (currentIdx < arr.length - 1) {
+    historyMap[idx] = arr.slice(0, currentIdx + 1)
+  }
+  historyMap[idx].push(newUrl)
+  historyIndexMap[idx] = historyMap[idx].length - 1
+}
+
+// 4) 일괄 크롭: CENTER-CROP 로직 + 히스토리 기록
+async function applyBatchCrop() {
+  if (!desiredWidth.value || !desiredHeight.value) {
+    alert('먼저 크롭할 픽셀 값을 입력하고 “적용” 버튼을 눌러주세요.')
+    return
+  }
+  if (selectedBatch.value.length === 0) {
+    alert('일괄 크롭할 이미지를 하나 이상 선택해주세요.')
+    return
+  }
+
+  const w = desiredWidth.value
+  const h = desiredHeight.value
+
+  for (const idx of selectedBatch.value) {
+    const imgItem = images.value[idx]
+    const originalUrl = imgItem.url
+    const originalType = imgItem.type
+
+    // 이미지 로드
+    const img = new Image()
+    img.src = originalUrl
+    await img.decode()
+
+    // 캔버스 설정 (center-crop)
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+
+    const sx = Math.max((img.naturalWidth - w) / 2, 0)
+    const sy = Math.max((img.naturalHeight - h) / 2, 0)
+    ctx.drawImage(img, sx, sy, w, h, 0, 0, w, h)
+
+    // 해당 idx 히스토리에 원본 URL 저장
+    pushToHistory(idx, originalUrl)
+
+    // 캔버스에서 Blob 생성 → 새 URL 얻기
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), originalType)
+    })
+    if (blob) {
+      // newUrl을 생성하기 전에 기존 URL을 revoke하지 않습니다.
+      const newUrl = URL.createObjectURL(blob)
+      // 배열에 덮어쓰기
+      images.value[idx].url = newUrl
+
+      // 해당 idx 히스토리에 크롭 후 URL 저장
+      pushToHistory(idx, newUrl)
+    }
+  }
+
+  // 첫 번째 선택 이미지를 편집 모드로 전환
+  if (selectedBatch.value.length > 0) {
+    selectImage(selectedBatch.value[0])
+  }
+}
+
+// 5) 일괄 변환: 동일 포맷 변환 로직 + 히스토리 기록
+async function applyBatchConvert() {
+  if (selectedBatch.value.length === 0) {
+    alert('일괄 변환할 이미지를 하나 이상 선택해주세요.')
+    return
+  }
+
+  for (const idx of selectedBatch.value) {
+    const imgItem = images.value[idx]
+    const originalUrl = imgItem.url
+    const originalType = imgItem.type
+
+    const img = new Image()
+    img.src = originalUrl
+    await img.decode()
+
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, 0, 0)
+
+    // 해당 idx 히스토리에 원본 URL 저장
+    pushToHistory(idx, originalUrl)
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), convertedFormat.value)
+    })
+    if (blob) {
+      // newUrl을 생성하기 전에 기존 URL을 revoke하지 않습니다.
+      const newUrl = URL.createObjectURL(blob)
+      images.value[idx].url = newUrl
+      images.value[idx].type = convertedFormat.value
+
+      // 해당 idx 히스토리에 변환 후 URL 저장
+      pushToHistory(idx, newUrl)
+    }
+  }
+
+  // 첫 번째 선택 이미지를 편집 모드로 전환
+  if (selectedBatch.value.length > 0) {
+    selectImage(selectedBatch.value[0])
+  }
+}
+
+// 6) 일괄 Undo
+function applyBatchUndo() {
+  for (const idx of selectedBatch.value) {
+    const currentIdx = historyIndexMap[idx]
+    if (currentIdx! > 0) {
+      // 현재 URL revoke
+      URL.revokeObjectURL(images.value[idx].url)
+      // 히스토리 인덱스 감소
+      historyIndexMap[idx] = currentIdx! - 1
+      // 이전 URL 가져와 복원
+      const prevUrl = historyMap[idx]![historyIndexMap[idx]!]
+      images.value[idx].url = prevUrl
+    }
+  }
+}
+
+// 7) 일괄 Redo
+function applyBatchRedo() {
+  for (const idx of selectedBatch.value) {
+    const arr = historyMap[idx] || []
+    const currentIdx = historyIndexMap[idx]
+    if (currentIdx! < arr.length - 1) {
+      // 현재 URL revoke
+      URL.revokeObjectURL(images.value[idx].url)
+      // 히스토리 인덱스 증가
+      historyIndexMap[idx] = currentIdx! + 1
+      // 다음 URL 가져와 복원
+      const nextUrl = historyMap[idx]![historyIndexMap[idx]!]
+      images.value[idx].url = nextUrl
+    }
+  }
+}
+
+const batchUndoDisabled = computed(() => {
+  return !selectedBatch.value.some(
+    (idx) => historyIndexMap[idx]! > 0
+  )
+})
+const batchRedoDisabled = computed(() => {
+  return !selectedBatch.value.some(
+    (idx) => historyIndexMap[idx]! < (historyMap[idx]!.length - 1)
+  )
+})
+
+// 8) Cropper 준비 완료
+function onCropReady({ detail }: CustomEvent) {
+  cropData.width = detail.width
+  cropData.height = detail.height
+}
+
+// 9) Crop 결과 수신
+function onCropped(blob: Blob) {
+  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value)
+  croppedBlob.value = blob
+  croppedUrl.value = URL.createObjectURL(blob)
+
+  if (selectedIndex.value !== null) {
+    const idx = selectedIndex.value
+    // 히스토리 먼저 기록
+    pushToHistory(idx, images.value[idx].url)
+    // 현재 URL revoke
+    URL.revokeObjectURL(images.value[idx].url)
+    // 배열 덮어쓰기
+    images.value[idx].url = croppedUrl.value
+    // 히스토리 새 URL 저장
+    pushToHistory(idx, croppedUrl.value)
+  }
+}
+
+// 10) Crop된 이미지 다운로드
+function downloadCropped() {
+  if (!croppedUrl.value || selectedIndex.value === null) return
+  const a = document.createElement('a')
+  a.href = croppedUrl.value
+  const ext = originalFormat.value.split('/')[1] || 'png'
+  a.download = `cropped.${ext}`
+  a.click()
+}
+
+// 11) Undo / Redo (한 이미지)
+const undoDisabled = computed(() => {
+  if (selectedIndex.value === null) return true
+  return historyIndexMap[selectedIndex.value]! <= 0
+})
+const redoDisabled = computed(() => {
+  if (selectedIndex.value === null) return true
+  const arr = historyMap[selectedIndex.value] || []
+  return historyIndexMap[selectedIndex.value]! >= arr.length - 1
+})
 
 function undo() {
-  if (historyIndex.value <= 0) return;
-  historyIndex.value -= 1;
+  if (selectedIndex.value === null) return
+  const idx = selectedIndex.value
+  const currentIdx = historyIndexMap[idx]
+  if (currentIdx! > 0) {
+    // 현재 URL revoke
+    URL.revokeObjectURL(images.value[idx].url)
+    // 히스토리 인덱스 감소
+    historyIndexMap[idx] = currentIdx! - 1
+    // 이전 URL 가져와 복원
+    const prevUrl = historyMap[idx]![historyIndexMap[idx]!]
+    images.value[idx].url = prevUrl
+  }
 }
 
 function redo() {
-  if (historyIndex.value >= history.value.length - 1) return;
-  historyIndex.value += 1;
+  if (selectedIndex.value === null) return
+  const idx = selectedIndex.value
+  const arr = historyMap[idx] || []
+  const currentIdx = historyIndexMap[idx]
+  if (currentIdx! < arr.length - 1) {
+    // 현재 URL revoke
+    URL.revokeObjectURL(images.value[idx].url)
+    // 히스토리 인덱스 증가
+    historyIndexMap[idx] = currentIdx! + 1
+    // 다음 URL 가져와 복원
+    const nextUrl = historyMap[idx]![historyIndexMap[idx]!]
+    images.value[idx].url = nextUrl
+  }
 }
 
-// 7) 필터 스타일 전달 (Undo/Redo 시에도 filter 유지)
+// 12) 필터 스타일 전달
 const cropperStyle = computed(() => ({
   filter: `brightness(${brightness.value}) contrast(${contrast.value})`,
-}));
+}))
 
-// 8) 포맷 변환 로직
+// 13) 단일 이미지 포맷 변환
 async function convertOriginal() {
-  if (selectedIndex.value === null) return;
-  const imgItem = images.value[selectedIndex.value];
-  const img = new Image();
-  img.src = history.value[historyIndex.value] || imgItem.url;
-  await img.decode();
+  if (selectedIndex.value === null) return
+  const idx = selectedIndex.value
+  const imgItem = images.value[idx]
+  const originalUrl = imgItem.url
 
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d")!;
-  // 필터 적용하려면 아래 주석 해제
-  // ctx.filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
-  ctx.drawImage(img, 0, 0);
+  const img = new Image()
+  img.src = originalUrl
+  await img.decode()
 
-  canvas.toBlob((blob) => {
-    if (blob) {
-      if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
-      convertedUrl.value = URL.createObjectURL(blob);
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth
+  canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(img, 0, 0)
 
-      // 변환 결과도 히스토리에 추가 (Undo/Redo 대상)
-      pushToHistory(convertedUrl.value);
-    }
-  }, convertedFormat.value);
+  // 히스토리 기록
+  pushToHistory(idx, originalUrl)
+
+  canvas.toBlob(
+    (blob) => {
+      if (blob) {
+        if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value)
+        convertedUrl.value = URL.createObjectURL(blob)
+        // 현재 URL revoke
+        URL.revokeObjectURL(images.value[idx].url)
+        // 히스토리 새 URL 기록 & 복원
+        pushToHistory(idx, convertedUrl.value)
+        images.value[idx].url = convertedUrl.value
+        images.value[idx].type = convertedFormat.value
+      }
+    },
+    convertedFormat.value
+  )
 }
 
-// 9) 다운로드 파일명 계산
+// 14) 다운로드 파일명 계산
 const downloadCroppedName = computed(() => {
-  const ext = originalFormat.value.split("/")[1] || "png";
-  return `cropped.${ext}`;
-});
+  const ext = originalFormat.value.split('/')[1] || 'png'
+  return `cropped.${ext}`
+})
 const downloadOriginalName = computed(() => {
-  const ext = convertedFormat.value.split("/")[1] || "img";
-  return `converted.${ext}`;
-});
+  const ext = convertedFormat.value.split('/')[1] || 'img'
+  return `converted.${ext}`
+})
 
 const selectedImage = computed<ImgItem | null>(() => {
-  if (selectedIndex.value === null) return null;
-  return images.value[selectedIndex.value];
-});
+  if (selectedIndex.value === null) return null
+  return images.value[selectedIndex.value]
+})
 
 const originalFormatLabel = computed(() =>
-  originalFormat.value ? originalFormat.value.split("/")[1].toUpperCase() : ""
-);
+  originalFormat.value ? originalFormat.value.split('/')[1].toUpperCase() : ''
+)
 
-// 10) 크롭 박스 크기 적용
+// 15) 크롭 박스 크기 적용
 function applyDimensions() {
   if (widthInput.value && heightInput.value) {
-    desiredWidth.value = widthInput.value;
-    desiredHeight.value = heightInput.value;
+    desiredWidth.value = widthInput.value
+    desiredHeight.value = heightInput.value
   }
 }
 
-// 11) 이미지 제거
+// 16) 이미지 제거
 function removeImage(idx: number) {
-  URL.revokeObjectURL(images.value[idx].url);
-  images.value.splice(idx, 1);
-  croppedBlob.value = null;
-  croppedUrl.value = "";
-  convertedUrl.value = "";
+  URL.revokeObjectURL(images.value[idx].url)
+  images.value.splice(idx, 1)
+  croppedBlob.value = null
+  croppedUrl.value = ''
+  convertedUrl.value = ''
+  delete historyMap[idx]
+  delete historyIndexMap[idx]
+
   if (images.value.length === 0) {
-    selectedIndex.value = null;
-    originalFormat.value = "";
-    history.value = [];
-    historyIndex.value = -1;
+    selectedIndex.value = null
+    originalFormat.value = ''
+    // 히스토리 맵 초기화
+    Object.keys(historyMap).forEach((key) => delete historyMap[+key])
+    Object.keys(historyIndexMap).forEach((key) => delete historyIndexMap[+key])
+    selectedBatch.value = []
   } else {
     selectedIndex.value =
-      idx <= images.value.length - 1 ? idx : images.value.length - 1;
-    originalFormat.value = images.value[selectedIndex.value].type;
-    brightness.value = 1;
-    contrast.value = 1;
-    widthInput.value = null;
-    heightInput.value = null;
-    desiredWidth.value = null;
-    desiredHeight.value = null;
-    // 신규 이미지로 히스토리 초기화
-    history.value = [images.value[selectedIndex.value].url];
-    historyIndex.value = 0;
-    setConvertedFormat();
+      idx <= images.value.length - 1 ? idx : images.value.length - 1
+    originalFormat.value = images.value[selectedIndex.value].type
+    brightness.value = 1
+    contrast.value = 1
+    widthInput.value = null
+    heightInput.value = null
+    desiredWidth.value = null
+    desiredHeight.value = null
+    // 선택된 이미지 인덱스에 해당하는 히스토리 유지
+    setConvertedFormat()
+    selectedBatch.value = selectedBatch.value.filter((i) => i !== idx)
   }
 }
 
-// 12) 전체 초기화
+// 17) 전체 초기화
 function resetAll() {
-  images.value.forEach((img) => URL.revokeObjectURL(img.url));
-  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value);
-  if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value);
-  images.value = [];
-  selectedIndex.value = null;
-  originalFormat.value = "";
-  croppedBlob.value = null;
-  croppedUrl.value = "";
-  convertedUrl.value = "";
-  mode.value = "crop";
-  convertedFormat.value = "";
-  brightness.value = 1;
-  contrast.value = 1;
-  widthInput.value = null;
-  heightInput.value = null;
-  desiredWidth.value = null;
-  desiredHeight.value = null;
-  history.value = [];
-  historyIndex.value = -1;
+  images.value.forEach((img) => URL.revokeObjectURL(img.url))
+  if (croppedUrl.value) URL.revokeObjectURL(croppedUrl.value)
+  if (convertedUrl.value) URL.revokeObjectURL(convertedUrl.value)
+  images.value = []
+  selectedIndex.value = null
+  originalFormat.value = ''
+  croppedBlob.value = null
+  croppedUrl.value = ''
+  convertedUrl.value = ''
+  mode.value = 'crop'
+  convertedFormat.value = ''
+  brightness.value = 1
+  contrast.value = 1
+  widthInput.value = null
+  heightInput.value = null
+  desiredWidth.value = null
+  desiredHeight.value = null
+  selectedBatch.value = []
+  // 히스토리 맵 초기화
+  Object.keys(historyMap).forEach((key) => delete historyMap[+key])
+  Object.keys(historyIndexMap).forEach((key) => delete historyIndexMap[+key])
 }
 
-// 13) 변환 대상 포맷 초기 설정
+// 18) 변환 대상 포맷 초기 설정
 function setConvertedFormat() {
-  const fmts = ["image/png", "image/jpeg", "image/webp", "image/jpg"];
+  const fmts = ['image/png', 'image/jpeg', 'image/webp', 'image/jpg']
   convertedFormat.value =
-    fmts.find((f) => f !== originalFormat.value) || fmts[0];
+    fmts.find((f) => f !== originalFormat.value) || fmts[0]
 }
 </script>
 
@@ -481,8 +777,8 @@ function setConvertedFormat() {
 #app {
   background: #f5f5f5;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
   color: #333;
 }
 
@@ -493,12 +789,16 @@ function setConvertedFormat() {
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  justify-content: space-between;
 
   .header-content {
     max-width: 800px;
     margin: 0 auto;
     padding: 0.75rem 1rem;
+    width: 100%;
     display: flex;
+    justify-content: space-between;
     align-items: center;
   }
 
@@ -507,6 +807,15 @@ function setConvertedFormat() {
     font-weight: bold;
     margin: 0;
     color: #409eff;
+  }
+
+  .locale-switcher {
+    background: #f0f0f0;
+    border: none;
+    padding: 0.3rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
   }
 }
 
@@ -567,8 +876,19 @@ function setConvertedFormat() {
   }
 }
 
-/* 썸네일 목록 */
+/* 썸네일 목록 + 배치 처리 */
 .thumbnails-card {
+  .batch-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+
+    button {
+      flex: none;
+    }
+  }
+
   .thumb-list {
     display: flex;
     flex-wrap: nowrap;
@@ -579,6 +899,7 @@ function setConvertedFormat() {
   }
 
   .thumb-wrapper {
+    position: relative;
     flex: 0 0 auto;
     width: 100px;
     cursor: pointer;
@@ -590,6 +911,14 @@ function setConvertedFormat() {
 
     &.selected {
       border-color: #409eff;
+    }
+
+    .batch-checkbox {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      z-index: 10;
+      transform: scale(1.2);
     }
 
     .thumb-img {
@@ -606,7 +935,10 @@ function setConvertedFormat() {
     }
   }
 
-  .reset-all {
+  .footer-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-top: 1rem;
   }
 }
@@ -724,7 +1056,7 @@ function setConvertedFormat() {
           gap: 0.25rem;
           font-size: 0.9rem;
 
-          input[type="range"] {
+          input[type='range'] {
             width: 120px;
           }
         }
@@ -743,7 +1075,7 @@ function setConvertedFormat() {
           gap: 0.25rem;
           font-size: 0.9rem;
 
-          input[type="number"] {
+          input[type='number'] {
             width: 100px;
             padding: 0.25rem;
             border: 1px solid #ccc;
@@ -869,11 +1201,21 @@ function setConvertedFormat() {
 
   /* 썸네일 */
   .thumbnails-card {
+    .batch-controls {
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
     .thumb-wrapper {
       width: 80px;
 
       .thumb-name {
         font-size: 0.7rem;
+      }
+
+      .batch-checkbox {
+        transform: scale(1);
       }
     }
 
@@ -914,7 +1256,7 @@ function setConvertedFormat() {
           flex-direction: column;
           gap: 0.5rem;
 
-          .filter-group input[type="range"] {
+          .filter-group input[type='range'] {
             width: 100px;
           }
         }
@@ -923,7 +1265,7 @@ function setConvertedFormat() {
           flex-direction: column;
           gap: 0.75rem;
 
-          .dim-group input[type="number"] {
+          .dim-group input[type='number'] {
             width: 100px;
             font-size: 0.85rem;
           }
