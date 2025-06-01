@@ -1,127 +1,78 @@
 <template>
   <div class="image-cropper-wrapper">
-    <!-- 픽셀 단위 입력 폼 -->
-    <div class="dimensions-inputs">
-      <label>
-        Width(px):
-        <input type="number" v-model.number="widthPx" min="1" />
-      </label>
-      <label>
-        Height(px):
-        <input type="number" v-model.number="heightPx" min="1" />
-      </label>
-      <button class="apply-button" @click="applyDimensions">적용</button>
+    <!-- cropperStyle prop을 상위에서 받아서 스타일로 바인딩 -->
+    <div :style="cropperStyle" class="cropper-container">
+      <vue-cropper
+        ref="cropper"
+        :src="src"
+        :aspect-ratio="aspectRatio"
+        :view-mode="1"
+        :auto-crop-area="1"
+        :drag-mode="'crop'"
+        :guides="true"
+        :background="false"
+        :responsive="true"
+        class="cropper"
+      />
     </div>
-
-    <!-- Cropper.js 컴포넌트 (자유 비율) -->
-    <vue-cropper
-      ref="cropper"
-      :src="src"
-      view-mode="1"
-      :auto-crop-area="1"
-      drag-mode="crop"
-      :guides="true"
-      :background="false"
-      :responsive="true"
-      class="cropper"
-    />
-
-    <!-- 이미지 자르기 버튼 -->
     <button class="crop-button" @click="cropImage">이미지 자르기</button>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
-import VueCropper from 'vue-cropperjs';
+import { ref, defineProps, defineEmits } from "vue";
+import VueCropper from "vue-cropperjs";
 
-// 부모로부터 이미지 URL만 받음
-const props = defineProps<{ src: string }>();
-const emit = defineEmits<{ (e: 'cropped', blob: Blob, format: string): void }>();
+// Props: src, aspectRatio, 그리고 새로 추가된 cropperStyle
+const props = defineProps<{
+  src: string;
+  aspectRatio: number | null;
+  cropperStyle?: Record<string, string>;
+}>();
 
-// Cropper 인스턴스
+const emit = defineEmits<{
+  (e: "cropped", blob: Blob): void;
+}>();
+
 const cropper = ref<InstanceType<typeof VueCropper> | null>(null);
 
-// 원하는 픽셀 단위 크기
-const widthPx = ref<number>(100);
-const heightPx = ref<number>(100);
-// 출력 포맷 결정
-const outputFormat = ref<string>('image/jpeg');
-
-// 크롭 박스 크기 설정 (픽셀 단위)
-function applyDimensions() {
-  if (!cropper.value) return;
-  cropper.value.setCropBoxData({ width: widthPx.value, height: heightPx.value });
-}
-
-// 실제 이미지 자르기 및 포맷 변환
 function cropImage() {
   if (!cropper.value) return;
-  const canvas = cropper.value.getCroppedCanvas({ width: widthPx.value, height: heightPx.value });
+  const canvas = cropper.value.getCroppedCanvas();
   canvas.toBlob((blob) => {
-    if (blob) emit('cropped', blob, outputFormat.value);
-  }, outputFormat.value);
+    if (blob) emit("cropped", blob);
+  }, "image/jpeg");
+}
+
+function onReady(e: CustomEvent) {
+  // 필요 시 ready 이벤트 활용 (이미 App.vue에서 handle)
 }
 </script>
 
 <style lang="scss" scoped>
 .image-cropper-wrapper {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 1rem;
 
-  .dimensions-inputs {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-
-    label {
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-
-      input,
-      select {
-        margin-left: 0.5rem;
-        padding: 0.2rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-      }
-    }
-
-    .apply-button {
-      position: relative;
-      z-index: 10;
-      padding: 0.4rem 1rem;
-      font-size: 0.9rem;
-      background-color: #409eff;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      &:hover {
-        background-color: #66b1ff;
-      }
-    }
+  .cropper-container {
+    width: 100%;
+    max-width: 700px;
+    height: 400px;
+    /* 이제 App.vue에서 전달한 filter(cropperStyle)가 적용됩니다 */
   }
 
   .cropper {
     width: 100%;
-    max-width: 500px;
-    height: 400px;
+    height: 100%;
   }
 
   .crop-button {
-    position: relative;
-    z-index: 10;
     margin-top: 1rem;
     padding: 0.5rem 1rem;
-    font-size: 0.9rem;
     background-color: #409eff;
-    color: #fff;
+    color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;

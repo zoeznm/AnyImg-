@@ -1,29 +1,30 @@
 <template>
   <div class="uploader">
     <label for="file-input" class="dropzone">
-      파일을 드래그하거나 클릭해 업로드
+      파일을 드래그하거나 클릭해 업로드 (여러 장 선택 가능)
       <input
         id="file-input"
         type="file"
         accept="image/*"
-        @change="onFileChange"
+        multiple
+        @change="onFilesChange"
       />
     </label>
   </div>
 </template>
 
 <script lang="ts" setup>
-
+// defineEmits 매크로(별도 import 불필요)
 const emit = defineEmits<{
-  (e: 'file-selected', file: File): void
+  (e: 'files-selected', files: File[]): void;
 }>();
 
-function onFileChange(e: Event) {
+function onFilesChange(e: Event) {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (file) {
-    emit('file-selected', file);
-  }
+  if (!input.files) return;
+  // FileList → Array<File>
+  const files = Array.from(input.files);
+  emit('files-selected', files);
 }
 </script>
 
